@@ -132,11 +132,13 @@ function ContactPicker({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setQuery("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -145,29 +147,44 @@ function ContactPicker({
 
   const filtered = contacts.filter((c) => {
     if (selected.some((s) => s.email === c.email)) return false;
+    if (!query) return true;
     const q = query.toLowerCase();
     return c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
   });
 
+  function toggleOpen() {
+    setOpen((prev) => {
+      if (!prev) setTimeout(() => searchRef.current?.focus(), 0);
+      return !prev;
+    });
+    setQuery("");
+  }
+
   function select(c: Contact) {
     onChange([...selected, c]);
     setQuery("");
+    searchRef.current?.focus();
   }
 
   function remove(email: string) {
     onChange(selected.filter((c) => c.email !== email));
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && isValidEmail(query) && !selected.some((s) => s.email === query)) {
-      onChange([...selected, { name: query, email: query }]);
-      setQuery("");
-      setOpen(false);
-    }
-  }
-
   return (
     <div ref={wrapperRef} className={styles.pickerWrapper}>
+      {/* トリガー */}
+      <button type="button" className={styles.pickerTrigger} onClick={toggleOpen}>
+        <span className={styles.pickerTriggerLabel}>
+          {selected.length === 0
+            ? "対象者を選択..."
+            : `${selected.length}人選択中`}
+        </span>
+        <svg className={`${styles.pickerChevron} ${open ? styles.pickerChevronOpen : ""}`} width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <path fill="currentColor" d="M6 8L1 3h10z" />
+        </svg>
+      </button>
+
+      {/* 選択済みチップ */}
       {selected.length > 0 && (
         <div className={styles.chips}>
           {selected.map((c) => (
@@ -178,32 +195,34 @@ function ContactPicker({
           ))}
         </div>
       )}
-      <input
-        type="text"
-        className={styles.input}
-        placeholder="名前またはメールアドレスで検索..."
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={handleKeyDown}
-      />
-      {open && (filtered.length > 0 || (query && isValidEmail(query))) && (
+
+      {/* ドロップダウン */}
+      {open && (
         <div className={styles.dropdown}>
-          {filtered.slice(0, 8).map((c) => (
-            <button key={c.email} className={styles.dropdownItem} onMouseDown={() => select(c)}>
-              <span className={styles.dropdownName}>{c.name}</span>
-              <span className={styles.dropdownEmail}>{c.email}</span>
-            </button>
-          ))}
-          {query && isValidEmail(query) && !contacts.some((c) => c.email === query) && (
-            <button
-              className={styles.dropdownItem}
-              onMouseDown={() => { onChange([...selected, { name: query, email: query }]); setQuery(""); setOpen(false); }}
-            >
-              <span className={styles.dropdownName}>追加</span>
-              <span className={styles.dropdownEmail}>{query}</span>
-            </button>
-          )}
+          <div className={styles.dropdownSearch}>
+            <input
+              ref={searchRef}
+              type="text"
+              className={styles.dropdownSearchInput}
+              placeholder="検索..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className={styles.dropdownList}>
+            {filtered.length === 0 && !query && (
+              <div className={styles.dropdownEmpty}>連絡先を読み込み中...</div>
+            )}
+            {filtered.length === 0 && query && (
+              <div className={styles.dropdownEmpty}>一致する連絡先がありません</div>
+            )}
+            {filtered.map((c) => (
+              <button key={c.email} className={styles.dropdownItem} onMouseDown={() => select(c)}>
+                <span className={styles.dropdownName}>{c.name}</span>
+                <span className={styles.dropdownEmail}>{c.email}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

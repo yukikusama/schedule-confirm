@@ -507,11 +507,50 @@
   position: relative;
 }
 
+.pickerTrigger {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: #ffffff;
+  border: none;
+  box-shadow: var(--shadow-border);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: box-shadow 0.15s;
+}
+
+.pickerTrigger:hover {
+  box-shadow: rgba(0, 0, 0, 0.12) 0px 0px 0px 1px;
+}
+
+.pickerTrigger:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+.pickerTriggerLabel {
+  font-size: 14px;
+  color: var(--color-placeholder);
+}
+
+.pickerChevron {
+  color: var(--color-placeholder);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.pickerChevronOpen {
+  transform: rotate(180deg);
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-top: 8px;
 }
 
 .chip {
@@ -553,8 +592,35 @@
   border-radius: 8px;
   z-index: 100;
   overflow: hidden;
+}
+
+.dropdownSearch {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dropdownSearchInput {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--color-surface);
+  border: none;
+  box-shadow: var(--shadow-border);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+.dropdownList {
   max-height: 240px;
   overflow-y: auto;
+}
+
+.dropdownEmpty {
+  padding: 16px 14px;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  text-align: center;
 }
 
 .dropdownItem {
