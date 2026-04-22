@@ -494,7 +494,7 @@ function EventModal({
             end: { dateTime: end.toISOString(), timeZone: tz },
             attendees: attendees.map((email) =>
               email === organizerEmail
-                ? { email, responseStatus: "accepted", self: true }
+                ? { email, responseStatus: "accepted" }
                 : { email }
             ),
           }),
