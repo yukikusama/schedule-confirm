@@ -416,14 +416,12 @@ function EventModal({
   attendees,
   accessToken,
   minDuration,
-  organizerEmail,
   onClose,
 }: {
   slots: FreeSlot[];
   attendees: string[];
   accessToken: string;
   minDuration: number;
-  organizerEmail: string;
   onClose: () => void;
 }) {
   const isSingle = slots.length === 1;
@@ -492,18 +490,13 @@ function EventModal({
             summary: titles[i],
             start: { dateTime: start.toISOString(), timeZone: tz },
             end: { dateTime: end.toISOString(), timeZone: tz },
-            attendees: attendees.map((email) =>
-              email === organizerEmail
-                ? { email, responseStatus: "accepted" }
-                : { email }
-            ),
+            attendees: attendees.map((email) => ({ email })),
           }),
         }).then(async (res) => {
-          const data = await res.json();
           if (!res.ok) {
-            throw new Error(data?.error?.message || `HTTPエラー ${res.status}`);
+            const e = await res.json();
+            throw new Error(e?.error?.message || `HTTPエラー ${res.status}`);
           }
-          console.log("[EventCreate] attendees in response:", data.attendees);
         })
       ));
       setDone(true);
@@ -784,11 +777,8 @@ export default function ScheduleChecker() {
     ...selectedMembers.map((m) => m.email),
   ];
 
-  // イベント参加者（自分は常に主催者として含める）
-  const eventAttendees = [
-    ...(userEmail ? [userEmail] : []),
-    ...selectedMembers.map((m) => m.email),
-  ];
+  // イベント参加者（自分はオーガナイザーとしてAPIが自動設定するため除外）
+  const eventAttendees = selectedMembers.map((m) => m.email);
 
   if (!accessToken) {
     if (autoLoginPending) {
@@ -998,7 +988,6 @@ export default function ScheduleChecker() {
           attendees={eventAttendees}
           accessToken={accessToken}
           minDuration={parseInt(minDuration, 10)}
-          organizerEmail={userEmail}
           onClose={() => setShowEventModal(false)}
         />
       )}
