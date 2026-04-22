@@ -720,11 +720,12 @@ export default function ScheduleChecker() {
     setFreeSlots(null);
     setCheckedSlots([]);
 
-    const targetEmails = [
-      ...(includeSelf && userEmail ? [userEmail] : []),
-      ...selectedMembers.map((m) => m.email),
+    // 自分のカレンダーは "primary" で問い合わせる（メールアドレス指定より確実）
+    const freeBusyItems: { id: string }[] = [
+      ...(includeSelf ? [{ id: "primary" }] : []),
+      ...selectedMembers.map((m) => ({ id: m.email })),
     ];
-    if (targetEmails.length === 0) { setError("少なくとも1人を選択してください。"); return; }
+    if (freeBusyItems.length === 0) { setError("少なくとも1人を選択してください。"); return; }
     if (!startDate || !endDate) { setError("検索期間を入力してください。"); return; }
     if (startDate > endDate) { setError("終了日は開始日以降の日付を指定してください。"); return; }
 
@@ -742,7 +743,7 @@ export default function ScheduleChecker() {
           timeMin,
           timeMax,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          items: targetEmails.map((id) => ({ id })),
+          items: freeBusyItems,
         }),
       });
 
@@ -770,8 +771,15 @@ export default function ScheduleChecker() {
 
   const dateOpts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
   const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+  // FreeBusy検索対象（includeSelfの設定に従う）
   const attendees = [
     ...(includeSelf && userEmail ? [userEmail] : []),
+    ...selectedMembers.map((m) => m.email),
+  ];
+
+  // イベント参加者（自分は常に主催者として含める）
+  const eventAttendees = [
+    ...(userEmail ? [userEmail] : []),
     ...selectedMembers.map((m) => m.email),
   ];
 
@@ -980,7 +988,7 @@ export default function ScheduleChecker() {
       {showEventModal && freeSlots && (
         <EventModal
           slots={checkedSlots.map((i) => freeSlots[i])}
-          attendees={attendees}
+          attendees={eventAttendees}
           accessToken={accessToken}
           minDuration={parseInt(minDuration, 10)}
           onClose={() => setShowEventModal(false)}
