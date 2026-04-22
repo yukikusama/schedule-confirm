@@ -14,7 +14,7 @@ const MEMBERS_KEY = "schedule_checker_members";
 type BusyPeriod = { start: Date; end: Date };
 type BusyMap = Record<string, BusyPeriod[]>;
 type FreeSlot = { start: Date; end: Date };
-type Member = { id: string; name: string; email: string };
+type Member = { id: string; email: string };
 
 declare global {
   interface Window {
@@ -133,8 +133,8 @@ function useMembers() {
     localStorage.setItem(MEMBERS_KEY, JSON.stringify(updated));
   }
 
-  function addMember(name: string, email: string) {
-    save([...members, { id: crypto.randomUUID(), name, email }]);
+  function addMember(email: string) {
+    save([...members, { id: crypto.randomUUID(), email }]);
   }
 
   function removeMember(id: string) {
@@ -154,20 +154,17 @@ function MemberManager({
   onClose,
 }: {
   members: Member[];
-  onAdd: (name: string, email: string) => void;
+  onAdd: (email: string) => void;
   onRemove: (id: string) => void;
   onClose: () => void;
 }) {
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
 
   function handleAdd() {
-    if (!name.trim()) { setErr("名前を入力してください。"); return; }
     if (!isValidEmail(email.trim())) { setErr("メールアドレスの形式が正しくありません。"); return; }
     if (members.some((m) => m.email === email.trim())) { setErr("すでに登録されています。"); return; }
-    onAdd(name.trim(), email.trim());
-    setName("");
+    onAdd(email.trim());
     setEmail("");
     setErr("");
   }
@@ -182,13 +179,6 @@ function MemberManager({
 
         {/* 追加フォーム */}
         <div className={styles.memberForm}>
-          <input
-            type="text"
-            className={styles.input}
-            placeholder="名前"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
           <input
             type="email"
             className={styles.input}
@@ -209,7 +199,6 @@ function MemberManager({
           {members.map((m) => (
             <div key={m.id} className={styles.memberItem}>
               <div className={styles.memberInfo}>
-                <span className={styles.memberName}>{m.name}</span>
                 <span className={styles.memberEmail}>{m.email}</span>
               </div>
               <button className={styles.btnRemove} onClick={() => onRemove(m.id)} aria-label="削除">×</button>
@@ -253,7 +242,7 @@ function ContactPicker({
     if (selected.some((s) => s.id === m.id)) return false;
     if (!query) return true;
     const q = query.toLowerCase();
-    return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
+    return m.email.toLowerCase().includes(q);
   });
 
   function toggleOpen() {
@@ -287,7 +276,7 @@ function ContactPicker({
         <div className={styles.chips}>
           {selected.map((m) => (
             <span key={m.id} className={styles.chip}>
-              {m.name}
+              {m.email}
               <button className={styles.chipRemove} onClick={() => remove(m.id)} aria-label="削除">×</button>
             </span>
           ))}
@@ -317,7 +306,6 @@ function ContactPicker({
             )}
             {filtered.map((m) => (
               <button key={m.id} className={styles.dropdownItem} onMouseDown={() => select(m)}>
-                <span className={styles.dropdownName}>{m.name}</span>
                 <span className={styles.dropdownEmail}>{m.email}</span>
               </button>
             ))}
@@ -329,46 +317,59 @@ function ContactPicker({
 }
 
 // ============================================================
-// EventModal — 予定作成モーダル
+// EventModal — 予定作成モーダル（一括・個別タイトル対応）
 // ============================================================
 function EventModal({
-  slot,
+  slots,
   attendees,
   accessToken,
   onClose,
 }: {
-  slot: FreeSlot;
+  slots: FreeSlot[];
   attendees: string[];
   accessToken: string;
   onClose: () => void;
 }) {
-  const [title, setTitle] = useState("");
+  const [mode, setMode] = useState<"common" | "individual">("common");
+  const [commonTitle, setCommonTitle] = useState("");
+  const [individualTitles, setIndividualTitles] = useState<string[]>(() => slots.map(() => ""));
   const [creating, setCreating] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
 
   const dateOpts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
   const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   async function create() {
-    if (!title.trim()) { setErr("タイトルを入力してください。"); return; }
+    const titles = mode === "common"
+      ? slots.map(() => commonTitle.trim())
+      : individualTitles.map((t) => t.trim());
+
+    if (titles.some((t) => !t)) {
+      setErr("すべてのタイトルを入力してください。");
+      return;
+    }
     setErr("");
     setCreating(true);
     try {
-      const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summary: title.trim(),
-          start: { dateTime: slot.start.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-          end: { dateTime: slot.end.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-          attendees: attendees.map((email) => ({ email })),
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e?.error?.message || `HTTPエラー ${res.status}`);
-      }
+      await Promise.all(slots.map((slot, i) =>
+        fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            summary: titles[i],
+            start: { dateTime: slot.start.toISOString(), timeZone: tz },
+            end: { dateTime: slot.end.toISOString(), timeZone: tz },
+            attendees: attendees.map((email) => ({ email })),
+          }),
+        }).then(async (res) => {
+          if (!res.ok) {
+            const e = await res.json();
+            throw new Error(e?.error?.message || `HTTPエラー ${res.status}`);
+          }
+        })
+      ));
       setDone(true);
     } catch (e) {
       setErr("作成失敗: " + (e instanceof Error ? e.message : "不明なエラー"));
@@ -381,7 +382,7 @@ function EventModal({
     <div className={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal}>
         <div className={styles.modalHeader}>
-          <span className={styles.modalTitle}>予定を作成</span>
+          <span className={styles.modalTitle}>予定を作成（{slots.length}件）</span>
           <button className={styles.modalClose} onClick={onClose}>×</button>
         </div>
 
@@ -393,24 +394,56 @@ function EventModal({
           </div>
         ) : (
           <>
-            <div className={styles.modalSlotInfo}>
-              <div>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</div>
-              <div className={styles.slotTime}>
-                {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
+            <div className={styles.modalModeToggle}>
+              <button
+                className={`${styles.modeBtn} ${mode === "common" ? styles.modeBtnActive : ""}`}
+                onClick={() => setMode("common")}
+              >共通タイトル</button>
+              <button
+                className={`${styles.modeBtn} ${mode === "individual" ? styles.modeBtnActive : ""}`}
+                onClick={() => setMode("individual")}
+              >個別タイトル</button>
+            </div>
+
+            {mode === "common" ? (
+              <div className={styles.fieldGroup}>
+                <label className={styles.label}>タイトル（全件共通）</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="例: 定例ミーティング"
+                  value={commonTitle}
+                  onChange={(e) => setCommonTitle(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && create()}
+                />
               </div>
-            </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>タイトル</label>
-              <input
-                type="text"
-                className={styles.input}
-                placeholder="例: 定例ミーティング"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => e.key === "Enter" && create()}
-              />
-            </div>
+            ) : (
+              <div className={styles.individualList}>
+                {slots.map((slot, i) => (
+                  <div key={i} className={styles.individualItem}>
+                    <div className={styles.individualSlotInfo}>
+                      <span>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</span>
+                      <span className={styles.slotTime}>
+                        {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      className={styles.input}
+                      placeholder="タイトル"
+                      value={individualTitles[i]}
+                      onChange={(e) => {
+                        const updated = [...individualTitles];
+                        updated[i] = e.target.value;
+                        setIndividualTitles(updated);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className={styles.fieldGroup}>
               <label className={styles.label}>参加者</label>
               <div className={styles.attendeeList}>
@@ -419,7 +452,7 @@ function EventModal({
             </div>
             {err && <div className={styles.errorMsg}>{err}</div>}
             <button className={styles.btnSearch} onClick={create} disabled={creating}>
-              {creating ? "作成中..." : "カレンダーに追加"}
+              {creating ? "作成中..." : `${slots.length}件をカレンダーに追加`}
             </button>
           </>
         )}
@@ -449,7 +482,8 @@ export default function ScheduleChecker() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [freeSlots, setFreeSlots] = useState<FreeSlot[] | null>(null);
-  const [eventModal, setEventModal] = useState<FreeSlot | null>(null);
+  const [checkedSlots, setCheckedSlots] = useState<number[]>([]);
+  const [showEventModal, setShowEventModal] = useState(false);
 
   useEffect(() => {
     const today = new Date();
@@ -507,6 +541,7 @@ export default function ScheduleChecker() {
   async function searchFreeSlots() {
     setError("");
     setFreeSlots(null);
+    setCheckedSlots([]);
 
     const targetEmails = [
       ...(includeSelf && userEmail ? [userEmail] : []),
@@ -710,21 +745,37 @@ export default function ScheduleChecker() {
               </div>
             )}
             {!loading && freeSlots !== null && freeSlots.length > 0 && (
-              <div className={styles.slotList}>
-                {freeSlots.map((slot, i) => (
-                  <div key={i} className={styles.slotItem}>
-                    <span className={styles.slotNumber}>{i + 1}</span>
-                    <div className={styles.slotInfo}>
-                      <div className={styles.slotDate}>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</div>
-                      <div className={styles.slotTime}>
-                        {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
-                      </div>
-                    </div>
-                    <span className={styles.slotDuration}>{formatDuration(slot.end.getTime() - slot.start.getTime())}</span>
-                    <button className={styles.btnCreateEvent} onClick={() => setEventModal(slot)}>予定を作成</button>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className={styles.slotList}>
+                  {freeSlots.map((slot, i) => {
+                    const checked = checkedSlots.includes(i);
+                    return (
+                      <label key={i} className={`${styles.slotItem} ${checked ? styles.slotItemChecked : ""}`}>
+                        <input
+                          type="checkbox"
+                          className={styles.slotCheckbox}
+                          checked={checked}
+                          onChange={() => setCheckedSlots((prev) =>
+                            checked ? prev.filter((n) => n !== i) : [...prev, i]
+                          )}
+                        />
+                        <div className={styles.slotInfo}>
+                          <div className={styles.slotDate}>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</div>
+                          <div className={styles.slotTime}>
+                            {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
+                          </div>
+                        </div>
+                        <span className={styles.slotDuration}>{formatDuration(slot.end.getTime() - slot.start.getTime())}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {checkedSlots.length > 0 && (
+                  <button className={styles.btnSearch} onClick={() => setShowEventModal(true)} style={{ marginTop: 12 }}>
+                    {checkedSlots.length}件の予定を作成
+                  </button>
+                )}
+              </>
             )}
           </section>
         )}
@@ -739,12 +790,12 @@ export default function ScheduleChecker() {
         />
       )}
 
-      {eventModal && (
+      {showEventModal && freeSlots && (
         <EventModal
-          slot={eventModal}
+          slots={checkedSlots.map((i) => freeSlots[i])}
           attendees={attendees}
           accessToken={accessToken}
-          onClose={() => setEventModal(null)}
+          onClose={() => setShowEventModal(false)}
         />
       )}
     </div>

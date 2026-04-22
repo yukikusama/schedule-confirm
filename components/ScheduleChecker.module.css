@@ -446,11 +446,25 @@
   padding: 14px 16px;
   box-shadow: var(--shadow-border);
   border-radius: 8px;
-  transition: box-shadow 0.15s;
+  transition: box-shadow 0.15s, background 0.15s;
+  cursor: pointer;
 }
 
 .slotItem:hover {
   box-shadow: rgba(0, 0, 0, 0.12) 0px 0px 0px 1px, rgba(0, 0, 0, 0.04) 0px 2px 4px;
+}
+
+.slotItemChecked {
+  background: var(--color-surface);
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 0px 0px 1.5px;
+}
+
+.slotCheckbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--color-text);
+  cursor: pointer;
 }
 
 .slotNumber {
@@ -680,7 +694,7 @@
    ============================================================ */
 .memberForm {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -736,6 +750,62 @@
   font-size: 12px;
   color: var(--color-text-tertiary);
   font-family: var(--font-mono);
+}
+
+/* ============================================================
+   Modal — mode toggle & individual list
+   ============================================================ */
+.modalModeToggle {
+  display: flex;
+  gap: 4px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-border);
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+
+.modeBtn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.modeBtnActive {
+  background: #ffffff;
+  color: var(--color-text);
+  box-shadow: var(--shadow-border);
+}
+
+.individualList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.individualItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.individualSlotInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
 }
 
 /* ============================================================
