@@ -499,10 +499,11 @@ function EventModal({
             ),
           }),
         }).then(async (res) => {
+          const data = await res.json();
           if (!res.ok) {
-            const e = await res.json();
-            throw new Error(e?.error?.message || `HTTPエラー ${res.status}`);
+            throw new Error(data?.error?.message || `HTTPエラー ${res.status}`);
           }
+          console.log("[EventCreate] attendees in response:", data.attendees);
         })
       ));
       setDone(true);
