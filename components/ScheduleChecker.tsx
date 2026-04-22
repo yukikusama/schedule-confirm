@@ -63,7 +63,8 @@ function calcFreeSlots(
   endDate: string,
   workStart: string,
   workEnd: string,
-  minDuration: number
+  minDuration: number,
+  excludeWeekends: boolean
 ): FreeSlot[] {
   const [wsH, wsM] = workStart.split(":").map(Number);
   const [weH, weM] = workEnd.split(":").map(Number);
@@ -71,6 +72,7 @@ function calcFreeSlots(
   const freeSlots: FreeSlot[] = [];
 
   for (let d = new Date(startDate); d <= new Date(endDate); d.setDate(d.getDate() + 1)) {
+    if (excludeWeekends && (d.getDay() === 0 || d.getDay() === 6)) continue;
     const dayStart = new Date(d);
     dayStart.setHours(wsH, wsM, 0, 0);
     const dayEnd = new Date(d);
@@ -442,6 +444,7 @@ export default function ScheduleChecker() {
   const [workStart, setWorkStart] = useState("09:00");
   const [workEnd, setWorkEnd] = useState("18:00");
   const [minDuration, setMinDuration] = useState("60");
+  const [excludeWeekends, setExcludeWeekends] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [freeSlots, setFreeSlots] = useState<FreeSlot[] | null>(null);
@@ -539,7 +542,7 @@ export default function ScheduleChecker() {
         }));
       }
 
-      setFreeSlots(calcFreeSlots(busyMap, startDate, endDate, workStart, workEnd, parseInt(minDuration, 10)));
+      setFreeSlots(calcFreeSlots(busyMap, startDate, endDate, workStart, workEnd, parseInt(minDuration, 10), excludeWeekends));
     } catch (e) {
       setError("APIエラー: " + (e instanceof Error ? e.message : "不明なエラー"));
     } finally {
@@ -618,6 +621,20 @@ export default function ScheduleChecker() {
             <div className={styles.dateRange}>
               <input type="date" className={styles.input} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
               <input type="date" className={styles.input} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+
+          <div className={styles.fieldGroup}>
+            <label className={styles.label}>土日の扱い</label>
+            <div className={styles.radioGroup}>
+              <label className={styles.radioLabel}>
+                <input type="radio" name="weekends" className={styles.radio} checked={excludeWeekends} onChange={() => setExcludeWeekends(true)} />
+                除外する
+              </label>
+              <label className={styles.radioLabel}>
+                <input type="radio" name="weekends" className={styles.radio} checked={!excludeWeekends} onChange={() => setExcludeWeekends(false)} />
+                含める
+              </label>
             </div>
           </div>
 
