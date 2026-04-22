@@ -10,6 +10,7 @@ const SCOPES = [
 ].join(" ");
 
 const MEMBERS_KEY = "schedule_checker_members";
+const ORG_DOMAIN = "mediaaid.co.jp";
 
 type BusyPeriod = { start: Date; end: Date };
 type BusyMap = Record<string, BusyPeriod[]>;
@@ -158,15 +159,51 @@ function MemberManager({
   onRemove: (id: string) => void;
   onClose: () => void;
 }) {
-  const [email, setEmail] = useState("");
+  const [orgMode, setOrgMode] = useState<"internal" | "external">("internal");
+  const [input, setInput] = useState("");
   const [err, setErr] = useState("");
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function resolveEmail(raw: string): string {
+    if (orgMode === "internal") return `${raw}@${ORG_DOMAIN}`;
+    return raw;
+  }
 
   function handleAdd() {
-    if (!isValidEmail(email.trim())) { setErr("メールアドレスの形式が正しくありません。"); return; }
-    if (members.some((m) => m.email === email.trim())) { setErr("すでに登録されています。"); return; }
-    onAdd(email.trim());
-    setEmail("");
+    const email = resolveEmail(input.trim());
+    if (!isValidEmail(email)) { setErr("メールアドレスの形式が正しくありません。"); return; }
+    if (members.some((m) => m.email === email)) { setErr("すでに登録されています。"); return; }
+    onAdd(email);
+    setInput("");
     setErr("");
+    setImportResult(null);
+  }
+
+  function handleCSV(text: string) {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    let added = 0;
+    let skipped = 0;
+    for (const line of lines) {
+      const email = resolveEmail(line);
+      if (!isValidEmail(email) || members.some((m) => m.email === email)) {
+        skipped++;
+        continue;
+      }
+      onAdd(email);
+      added++;
+    }
+    setImportResult(`${added}件追加${skipped > 0 ? `、${skipped}件スキップ` : ""}`);
+    setErr("");
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => handleCSV((ev.target?.result as string) ?? "");
+    reader.readAsText(file);
+    e.target.value = "";
   }
 
   return (
@@ -177,19 +214,57 @@ function MemberManager({
           <button className={styles.modalClose} onClick={onClose}>×</button>
         </div>
 
+        {/* 組織トグル */}
+        <div className={styles.modalModeToggle}>
+          <button
+            className={`${styles.modeBtn} ${orgMode === "internal" ? styles.modeBtnActive : ""}`}
+            onClick={() => { setOrgMode("internal"); setInput(""); setErr(""); setImportResult(null); }}
+          >組織内（{ORG_DOMAIN}）</button>
+          <button
+            className={`${styles.modeBtn} ${orgMode === "external" ? styles.modeBtnActive : ""}`}
+            onClick={() => { setOrgMode("external"); setInput(""); setErr(""); setImportResult(null); }}
+          >組織外</button>
+        </div>
+
         {/* 追加フォーム */}
         <div className={styles.memberForm}>
-          <input
-            type="email"
-            className={styles.input}
-            placeholder="メールアドレス"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          />
+          {orgMode === "internal" ? (
+            <div className={styles.memberInputInline}>
+              <input
+                type="text"
+                className={styles.input}
+                placeholder="yuki.kusama"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              />
+              <span className={styles.orgDomainSuffix}>@{ORG_DOMAIN}</span>
+            </div>
+          ) : (
+            <input
+              type="email"
+              className={styles.input}
+              placeholder="メールアドレス"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            />
+          )}
           <button className={styles.btnAddMember} onClick={handleAdd}>追加</button>
         </div>
         {err && <div className={styles.errorMsg}>{err}</div>}
+
+        {/* CSVインポート */}
+        <div className={styles.csvImport}>
+          <input ref={fileInputRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={handleFileChange} />
+          <button className={styles.btnCsvImport} onClick={() => fileInputRef.current?.click()}>
+            CSVから一括インポート
+          </button>
+          <span className={styles.csvHint}>
+            {orgMode === "internal" ? "1行1username（@なし）" : "1行1メールアドレス"}
+          </span>
+          {importResult && <span className={styles.importResult}>{importResult}</span>}
+        </div>
 
         {/* メンバー一覧 */}
         <div className={styles.memberList}>
