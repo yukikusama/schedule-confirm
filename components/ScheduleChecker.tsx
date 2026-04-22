@@ -416,12 +416,14 @@ function EventModal({
   attendees,
   accessToken,
   minDuration,
+  organizerEmail,
   onClose,
 }: {
   slots: FreeSlot[];
   attendees: string[];
   accessToken: string;
   minDuration: number;
+  organizerEmail: string;
   onClose: () => void;
 }) {
   const isSingle = slots.length === 1;
@@ -490,7 +492,11 @@ function EventModal({
             summary: titles[i],
             start: { dateTime: start.toISOString(), timeZone: tz },
             end: { dateTime: end.toISOString(), timeZone: tz },
-            attendees: attendees.map((email) => ({ email })),
+            attendees: attendees.map((email) =>
+              email === organizerEmail
+                ? { email, responseStatus: "accepted", self: true }
+                : { email }
+            ),
           }),
         }).then(async (res) => {
           if (!res.ok) {
@@ -991,6 +997,7 @@ export default function ScheduleChecker() {
           attendees={eventAttendees}
           accessToken={accessToken}
           minDuration={parseInt(minDuration, 10)}
+          organizerEmail={userEmail}
           onClose={() => setShowEventModal(false)}
         />
       )}
