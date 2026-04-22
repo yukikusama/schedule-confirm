@@ -1,20 +1,20 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import styles from "./ScheduleChecker.module.css";
 
 const CLIENT_ID = "258100577056-aqs0c8aopdse7o1fd67ds1f64hmqr3to.apps.googleusercontent.com";
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.freebusy",
   "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/contacts.readonly",
-  "https://www.googleapis.com/auth/directory.readonly",
 ].join(" ");
+
+const MEMBERS_KEY = "schedule_checker_members";
 
 type BusyPeriod = { start: Date; end: Date };
 type BusyMap = Record<string, BusyPeriod[]>;
 type FreeSlot = { start: Date; end: Date };
-type Contact = { name: string; email: string };
+type Member = { id: string; name: string; email: string };
 
 declare global {
   interface Window {
@@ -33,6 +33,9 @@ declare global {
   }
 }
 
+// ============================================================
+// ユーティリティ
+// ============================================================
 function formatDateInput(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -42,6 +45,16 @@ function formatDateInput(d: Date): string {
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function formatDuration(ms: number): string {
+  const min = Math.round(ms / 60000);
+  if (min >= 60) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m > 0 ? `${h}時間${m}分` : `${h}時間`;
+  }
+  return `${min}分`;
 }
 
 function calcFreeSlots(
@@ -57,10 +70,7 @@ function calcFreeSlots(
   const minMs = minDuration * 60 * 1000;
   const freeSlots: FreeSlot[] = [];
 
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  for (let d = new Date(startDate); d <= new Date(endDate); d.setDate(d.getDate() + 1)) {
     const dayStart = new Date(d);
     dayStart.setHours(wsH, wsM, 0, 0);
     const dayEnd = new Date(d);
@@ -85,17 +95,14 @@ function calcFreeSlots(
       if (merged.length === 0 || b.start > merged[merged.length - 1].end) {
         merged.push({ start: new Date(b.start), end: new Date(b.end) });
       } else {
-        const last = merged[merged.length - 1];
-        last.end = new Date(Math.max(last.end.getTime(), b.end.getTime()));
+        merged[merged.length - 1].end = new Date(Math.max(merged[merged.length - 1].end.getTime(), b.end.getTime()));
       }
     }
 
     let cursor = new Date(dayStart);
     for (const b of merged) {
-      if (b.start > cursor) {
-        if (b.start.getTime() - cursor.getTime() >= minMs) {
-          freeSlots.push({ start: new Date(cursor), end: new Date(b.start) });
-        }
+      if (b.start > cursor && b.start.getTime() - cursor.getTime() >= minMs) {
+        freeSlots.push({ start: new Date(cursor), end: new Date(b.start) });
       }
       cursor = new Date(Math.max(cursor.getTime(), b.end.getTime()));
     }
@@ -103,31 +110,126 @@ function calcFreeSlots(
       freeSlots.push({ start: new Date(cursor), end: new Date(dayEnd) });
     }
   }
-
   return freeSlots;
 }
 
-function formatDuration(ms: number): string {
-  const min = Math.round(ms / 60000);
-  if (min >= 60) {
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return m > 0 ? `${h}時間${m}分` : `${h}時間`;
+// ============================================================
+// useMembers — localStorageでメンバー管理
+// ============================================================
+function useMembers() {
+  const [members, setMembers] = useState<Member[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(MEMBERS_KEY);
+      if (saved) setMembers(JSON.parse(saved));
+    } catch { /* 無視 */ }
+  }, []);
+
+  function save(updated: Member[]) {
+    setMembers(updated);
+    localStorage.setItem(MEMBERS_KEY, JSON.stringify(updated));
   }
-  return `${min}分`;
+
+  function addMember(name: string, email: string) {
+    save([...members, { id: crypto.randomUUID(), name, email }]);
+  }
+
+  function removeMember(id: string) {
+    save(members.filter((m) => m.id !== id));
+  }
+
+  return { members, addMember, removeMember };
 }
 
 // ============================================================
-// ContactPicker コンポーネント
+// MemberManager — メンバー管理モーダル
+// ============================================================
+function MemberManager({
+  members,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  members: Member[];
+  onAdd: (name: string, email: string) => void;
+  onRemove: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [err, setErr] = useState("");
+
+  function handleAdd() {
+    if (!name.trim()) { setErr("名前を入力してください。"); return; }
+    if (!isValidEmail(email.trim())) { setErr("メールアドレスの形式が正しくありません。"); return; }
+    if (members.some((m) => m.email === email.trim())) { setErr("すでに登録されています。"); return; }
+    onAdd(name.trim(), email.trim());
+    setName("");
+    setEmail("");
+    setErr("");
+  }
+
+  return (
+    <div className={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className={styles.modal}>
+        <div className={styles.modalHeader}>
+          <span className={styles.modalTitle}>メンバー管理</span>
+          <button className={styles.modalClose} onClick={onClose}>×</button>
+        </div>
+
+        {/* 追加フォーム */}
+        <div className={styles.memberForm}>
+          <input
+            type="text"
+            className={styles.input}
+            placeholder="名前"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <input
+            type="email"
+            className={styles.input}
+            placeholder="メールアドレス"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          />
+          <button className={styles.btnAddMember} onClick={handleAdd}>追加</button>
+        </div>
+        {err && <div className={styles.errorMsg}>{err}</div>}
+
+        {/* メンバー一覧 */}
+        <div className={styles.memberList}>
+          {members.length === 0 && (
+            <div className={styles.dropdownEmpty}>まだメンバーが登録されていません</div>
+          )}
+          {members.map((m) => (
+            <div key={m.id} className={styles.memberItem}>
+              <div className={styles.memberInfo}>
+                <span className={styles.memberName}>{m.name}</span>
+                <span className={styles.memberEmail}>{m.email}</span>
+              </div>
+              <button className={styles.btnRemove} onClick={() => onRemove(m.id)} aria-label="削除">×</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ContactPicker — メンバーから選択するプルダウン
 // ============================================================
 function ContactPicker({
-  contacts,
+  members,
   selected,
   onChange,
 }: {
-  contacts: Contact[];
-  selected: Contact[];
-  onChange: (contacts: Contact[]) => void;
+  members: Member[];
+  selected: Member[];
+  onChange: (members: Member[]) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -145,58 +247,51 @@ function ContactPicker({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = contacts.filter((c) => {
-    if (selected.some((s) => s.email === c.email)) return false;
+  const filtered = members.filter((m) => {
+    if (selected.some((s) => s.id === m.id)) return false;
     if (!query) return true;
     const q = query.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+    return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
   });
 
   function toggleOpen() {
-    setOpen((prev) => {
-      if (!prev) setTimeout(() => searchRef.current?.focus(), 0);
-      return !prev;
-    });
+    if (!open) setTimeout(() => searchRef.current?.focus(), 0);
+    setOpen((prev) => !prev);
     setQuery("");
   }
 
-  function select(c: Contact) {
-    onChange([...selected, c]);
+  function select(m: Member) {
+    onChange([...selected, m]);
     setQuery("");
     searchRef.current?.focus();
   }
 
-  function remove(email: string) {
-    onChange(selected.filter((c) => c.email !== email));
+  function remove(id: string) {
+    onChange(selected.filter((m) => m.id !== id));
   }
 
   return (
     <div ref={wrapperRef} className={styles.pickerWrapper}>
-      {/* トリガー */}
       <button type="button" className={styles.pickerTrigger} onClick={toggleOpen}>
         <span className={styles.pickerTriggerLabel}>
-          {selected.length === 0
-            ? "対象者を選択..."
-            : `${selected.length}人選択中`}
+          {selected.length === 0 ? "対象者を選択..." : `${selected.length}人選択中`}
         </span>
         <svg className={`${styles.pickerChevron} ${open ? styles.pickerChevronOpen : ""}`} width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
           <path fill="currentColor" d="M6 8L1 3h10z" />
         </svg>
       </button>
 
-      {/* 選択済みチップ */}
       {selected.length > 0 && (
         <div className={styles.chips}>
-          {selected.map((c) => (
-            <span key={c.email} className={styles.chip}>
-              {c.name !== c.email ? c.name : c.email}
-              <button className={styles.chipRemove} onClick={() => remove(c.email)} aria-label="削除">×</button>
+          {selected.map((m) => (
+            <span key={m.id} className={styles.chip}>
+              {m.name}
+              <button className={styles.chipRemove} onClick={() => remove(m.id)} aria-label="削除">×</button>
             </span>
           ))}
         </div>
       )}
 
-      {/* ドロップダウン */}
       {open && (
         <div className={styles.dropdown}>
           <div className={styles.dropdownSearch}>
@@ -210,16 +305,18 @@ function ContactPicker({
             />
           </div>
           <div className={styles.dropdownList}>
-            {filtered.length === 0 && !query && (
-              <div className={styles.dropdownEmpty}>連絡先を読み込み中...</div>
+            {members.length === 0 && (
+              <div className={styles.dropdownEmpty}>
+                メンバーが未登録です。ヘッダーの「メンバー管理」から追加してください。
+              </div>
             )}
-            {filtered.length === 0 && query && (
-              <div className={styles.dropdownEmpty}>一致する連絡先がありません</div>
+            {members.length > 0 && filtered.length === 0 && query && (
+              <div className={styles.dropdownEmpty}>一致するメンバーがいません</div>
             )}
-            {filtered.map((c) => (
-              <button key={c.email} className={styles.dropdownItem} onMouseDown={() => select(c)}>
-                <span className={styles.dropdownName}>{c.name}</span>
-                <span className={styles.dropdownEmail}>{c.email}</span>
+            {filtered.map((m) => (
+              <button key={m.id} className={styles.dropdownItem} onMouseDown={() => select(m)}>
+                <span className={styles.dropdownName}>{m.name}</span>
+                <span className={styles.dropdownEmail}>{m.email}</span>
               </button>
             ))}
           </div>
@@ -230,7 +327,7 @@ function ContactPicker({
 }
 
 // ============================================================
-// EventModal コンポーネント
+// EventModal — 予定作成モーダル
 // ============================================================
 function EventModal({
   slot,
@@ -258,10 +355,7 @@ function EventModal({
     try {
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           summary: title.trim(),
           start: { dateTime: slot.start.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
@@ -303,7 +397,6 @@ function EventModal({
                 {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
               </div>
             </div>
-
             <div className={styles.fieldGroup}>
               <label className={styles.label}>タイトル</label>
               <input
@@ -316,18 +409,13 @@ function EventModal({
                 onKeyDown={(e) => e.key === "Enter" && create()}
               />
             </div>
-
             <div className={styles.fieldGroup}>
               <label className={styles.label}>参加者</label>
               <div className={styles.attendeeList}>
-                {attendees.map((a) => (
-                  <span key={a} className={styles.chip}>{a}</span>
-                ))}
+                {attendees.map((a) => <span key={a} className={styles.chip}>{a}</span>)}
               </div>
             </div>
-
             {err && <div className={styles.errorMsg}>{err}</div>}
-
             <button className={styles.btnSearch} onClick={create} disabled={creating}>
               {creating ? "作成中..." : "カレンダーに追加"}
             </button>
@@ -345,9 +433,10 @@ export default function ScheduleChecker() {
   const tokenClientRef = useRef<{ requestAccessToken: (opts: { prompt: string }) => void } | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const { members, addMember, removeMember } = useMembers();
+  const [showMemberManager, setShowMemberManager] = useState(false);
   const [includeSelf, setIncludeSelf] = useState(true);
-  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
+  const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [workStart, setWorkStart] = useState("09:00");
@@ -379,47 +468,6 @@ export default function ScheduleChecker() {
     document.body.appendChild(script);
   }, []);
 
-  const fetchContacts = useCallback(async (token: string) => {
-    const results: Contact[] = [];
-
-    // 個人の連絡先
-    try {
-      const res = await fetch(
-        "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000",
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        for (const p of data.connections || []) {
-          const email = p.emailAddresses?.[0]?.value;
-          const name = p.names?.[0]?.displayName || email;
-          if (email) results.push({ name, email });
-        }
-      }
-    } catch { /* 無視 */ }
-
-    // 組織ディレクトリ（Google Workspace）
-    try {
-      const res = await fetch(
-        "https://people.googleapis.com/v1/people:listDirectoryPeople?readMask=names,emailAddresses&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE&pageSize=1000",
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        for (const p of data.people || []) {
-          const email = p.emailAddresses?.[0]?.value;
-          const name = p.names?.[0]?.displayName || email;
-          if (email && !results.some((r) => r.email === email)) {
-            results.push({ name, email });
-          }
-        }
-      }
-    } catch { /* 無視 */ }
-
-    results.sort((a, b) => a.name.localeCompare(b.name, "ja"));
-    setContacts(results);
-  }, []);
-
   function onTokenReceived(response: { access_token?: string; error?: string }) {
     if (response.error || !response.access_token) {
       setError("認証に失敗しました: " + response.error);
@@ -427,14 +475,11 @@ export default function ScheduleChecker() {
     }
     const token = response.access_token;
     setAccessToken(token);
-
     fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
       .then((info) => setUserEmail(info.email || ""));
-
-    fetchContacts(token);
   }
 
   function signIn() {
@@ -445,8 +490,7 @@ export default function ScheduleChecker() {
     if (accessToken) window.google.accounts.oauth2.revoke(accessToken, () => {});
     setAccessToken(null);
     setUserEmail("");
-    setContacts([]);
-    setSelectedContacts([]);
+    setSelectedMembers([]);
     setFreeSlots(null);
     setError("");
   }
@@ -457,13 +501,9 @@ export default function ScheduleChecker() {
 
     const targetEmails = [
       ...(includeSelf && userEmail ? [userEmail] : []),
-      ...selectedContacts.map((c) => c.email),
+      ...selectedMembers.map((m) => m.email),
     ];
-
-    if (targetEmails.length === 0) {
-      setError("少なくとも1人を選択してください。");
-      return;
-    }
+    if (targetEmails.length === 0) { setError("少なくとも1人を選択してください。"); return; }
     if (!startDate || !endDate) { setError("検索期間を入力してください。"); return; }
     if (startDate > endDate) { setError("終了日は開始日以降の日付を指定してください。"); return; }
 
@@ -486,13 +526,13 @@ export default function ScheduleChecker() {
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err?.error?.message || `HTTPエラー ${response.status}`);
+        const e = await response.json();
+        throw new Error(e?.error?.message || `HTTPエラー ${response.status}`);
       }
 
       const data = await response.json();
       const busyMap: BusyMap = {};
-      for (const [email, calData] of Object.entries(data.calendars as Record<string, { busy?: { start: string; end: string }[]; errors?: unknown[] }>)) {
+      for (const [email, calData] of Object.entries(data.calendars as Record<string, { busy?: { start: string; end: string }[] }>)) {
         busyMap[email] = ((calData.busy || []) as { start: string; end: string }[]).map((b) => ({
           start: new Date(b.start),
           end: new Date(b.end),
@@ -500,8 +540,8 @@ export default function ScheduleChecker() {
       }
 
       setFreeSlots(calcFreeSlots(busyMap, startDate, endDate, workStart, workEnd, parseInt(minDuration, 10)));
-    } catch (err) {
-      setError("APIエラー: " + (err instanceof Error ? err.message : "不明なエラー"));
+    } catch (e) {
+      setError("APIエラー: " + (e instanceof Error ? e.message : "不明なエラー"));
     } finally {
       setLoading(false);
     }
@@ -509,10 +549,9 @@ export default function ScheduleChecker() {
 
   const dateOpts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
   const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
-
   const attendees = [
     ...(includeSelf && userEmail ? [userEmail] : []),
-    ...selectedContacts.map((c) => c.email),
+    ...selectedMembers.map((m) => m.email),
   ];
 
   if (!accessToken) {
@@ -543,6 +582,9 @@ export default function ScheduleChecker() {
       <header className={styles.header}>
         <span className={styles.headerTitle}>空き時間チェッカー</span>
         <div className={styles.userBar}>
+          <button className={styles.btnMemberManager} onClick={() => setShowMemberManager(true)}>
+            メンバー管理
+          </button>
           <span className={styles.userEmail}>{userEmail}</span>
           <button className={styles.btnSignout} onClick={signOut}>サインアウト</button>
         </div>
@@ -568,11 +610,7 @@ export default function ScheduleChecker() {
 
           <div className={styles.fieldGroup}>
             <label className={styles.label}>対象者</label>
-            <ContactPicker
-              contacts={contacts}
-              selected={selectedContacts}
-              onChange={setSelectedContacts}
-            />
+            <ContactPicker members={members} selected={selectedMembers} onChange={setSelectedMembers} />
           </div>
 
           <div className={styles.fieldGroup}>
@@ -624,9 +662,7 @@ export default function ScheduleChecker() {
           <section className={styles.card}>
             <div className={styles.resultsHeader}>
               <h2 className={styles.cardTitle} style={{ marginBottom: 0 }}>共通の空き時間</h2>
-              {!loading && freeSlots !== null && (
-                <span className={styles.badge}>{freeSlots.length}件</span>
-              )}
+              {!loading && freeSlots !== null && <span className={styles.badge}>{freeSlots.length}件</span>}
             </div>
 
             {loading && (
@@ -635,14 +671,12 @@ export default function ScheduleChecker() {
                 <span>空き時間を検索中...</span>
               </div>
             )}
-
             {!loading && freeSlots !== null && freeSlots.length === 0 && (
               <div className={styles.emptyState}>
                 指定期間内に共通の空き時間が見つかりませんでした。<br />
                 期間や稼働時間を変えて試してみてください。
               </div>
             )}
-
             {!loading && freeSlots !== null && freeSlots.length > 0 && (
               <div className={styles.slotList}>
                 {freeSlots.map((slot, i) => (
@@ -655,9 +689,7 @@ export default function ScheduleChecker() {
                       </div>
                     </div>
                     <span className={styles.slotDuration}>{formatDuration(slot.end.getTime() - slot.start.getTime())}</span>
-                    <button className={styles.btnCreateEvent} onClick={() => setEventModal(slot)}>
-                      予定を作成
-                    </button>
+                    <button className={styles.btnCreateEvent} onClick={() => setEventModal(slot)}>予定を作成</button>
                   </div>
                 ))}
               </div>
@@ -665,6 +697,15 @@ export default function ScheduleChecker() {
           </section>
         )}
       </main>
+
+      {showMemberManager && (
+        <MemberManager
+          members={members}
+          onAdd={addMember}
+          onRemove={removeMember}
+          onClose={() => setShowMemberManager(false)}
+        />
+      )}
 
       {eventModal && (
         <EventModal
