@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "空き時間チェッカー",
+  title: "Sukima",
   description: "複数人のGoogleカレンダーから共通の空き時間を自動で見つけます",
 };
 

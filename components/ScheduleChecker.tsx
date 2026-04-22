@@ -292,10 +292,12 @@ function ContactPicker({
   members,
   selected,
   onChange,
+  onOpenMemberManager,
 }: {
   members: Member[];
   selected: Member[];
   onChange: (members: Member[]) => void;
+  onOpenMemberManager: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -372,8 +374,12 @@ function ContactPicker({
           </div>
           <div className={styles.dropdownList}>
             {members.length === 0 && (
-              <div className={styles.dropdownEmpty}>
-                メンバーが未登録です。ヘッダーの「メンバー管理」から追加してください。
+              <div className={styles.dropdownEmptyWithAction}>
+                <span>まだメンバーが登録されていません</span>
+                <button
+                  className={styles.btnAddMemberInline}
+                  onMouseDown={(e) => { e.preventDefault(); setOpen(false); onOpenMemberManager(); }}
+                >＋ メンバーを追加</button>
               </div>
             )}
             {members.length > 0 && filtered.length === 0 && query && (
@@ -686,7 +692,7 @@ export default function ScheduleChecker() {
     return (
       <div className={styles.authWrapper}>
         <div className={styles.authCard}>
-          <div className={styles.authTitle}>空き時間チェッカー</div>
+          <div className={styles.authTitle}>Sukima</div>
           <p className={styles.authDesc}>
             複数人のGoogleカレンダーを参照し、<br />
             共通の空き時間を自動で見つけます。
@@ -700,6 +706,16 @@ export default function ScheduleChecker() {
             </svg>
             Googleでサインイン
           </button>
+          {process.env.NODE_ENV === "development" && (
+            <button
+              className={styles.btnDevPreview}
+              onClick={() => {
+                setAccessToken("__dev__");
+                setUserEmail("dev@example.com");
+                setAutoLoginPending(false);
+              }}
+            >UIプレビュー（開発用）</button>
+          )}
         </div>
       </div>
     );
@@ -708,7 +724,7 @@ export default function ScheduleChecker() {
   return (
     <div className={styles.wrapper}>
       <header className={styles.header}>
-        <span className={styles.headerTitle}>空き時間チェッカー</span>
+        <span className={styles.headerTitle}>Sukima</span>
         <div className={styles.userBar}>
           <button className={styles.btnMemberManager} onClick={() => setShowMemberManager(true)}>
             メンバー管理
@@ -738,7 +754,7 @@ export default function ScheduleChecker() {
 
           <div className={styles.fieldGroup}>
             <label className={styles.label}>対象者</label>
-            <ContactPicker members={members} selected={selectedMembers} onChange={setSelectedMembers} />
+            <ContactPicker members={members} selected={selectedMembers} onChange={setSelectedMembers} onOpenMemberManager={() => setShowMemberManager(true)} />
           </div>
 
           <div className={styles.fieldGroup}>
