@@ -1,7 +1,7 @@
 // ============================================================
 // 設定: GCPのクライアントIDをここに入力してください
 // ============================================================
-const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
+const CLIENT_ID = '258100577056-aqs0c8aopdse7o1fd67ds1f64hmqr3to.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.freebusy';
 
 // ============================================================
