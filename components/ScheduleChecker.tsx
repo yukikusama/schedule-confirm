@@ -435,6 +435,7 @@ export default function ScheduleChecker() {
   const tokenClientRef = useRef<{ requestAccessToken: (opts: { prompt: string }) => void } | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
+  const [autoLoginPending, setAutoLoginPending] = useState(true);
   const { members, addMember, removeMember } = useMembers();
   const [showMemberManager, setShowMemberManager] = useState(false);
   const [includeSelf, setIncludeSelf] = useState(true);
@@ -465,15 +466,20 @@ export default function ScheduleChecker() {
       tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        callback: onTokenReceived,
+        callback: (response) => {
+          onTokenReceived(response);
+          setAutoLoginPending(false);
+        },
       });
+      // 一度ログインしたことがあれば自動でトークンを取得（ポップアップなし）
+      tokenClientRef.current.requestAccessToken({ prompt: "" });
     };
     document.body.appendChild(script);
   }, []);
 
   function onTokenReceived(response: { access_token?: string; error?: string }) {
     if (response.error || !response.access_token) {
-      setError("認証に失敗しました: " + response.error);
+      // サイレントログイン失敗は無視（手動ログインへフォールバック）
       return;
     }
     const token = response.access_token;
@@ -486,7 +492,7 @@ export default function ScheduleChecker() {
   }
 
   function signIn() {
-    tokenClientRef.current?.requestAccessToken({ prompt: "consent" });
+    tokenClientRef.current?.requestAccessToken({ prompt: "select_account" });
   }
 
   function signOut() {
@@ -558,6 +564,15 @@ export default function ScheduleChecker() {
   ];
 
   if (!accessToken) {
+    if (autoLoginPending) {
+      return (
+        <div className={styles.authWrapper}>
+          <div className={styles.loadingState}>
+            <div className={styles.spinner} />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className={styles.authWrapper}>
         <div className={styles.authCard}>
