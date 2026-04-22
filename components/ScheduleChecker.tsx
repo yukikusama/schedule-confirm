@@ -37,6 +37,17 @@ declare global {
 // ============================================================
 // ユーティリティ
 // ============================================================
+function toTimeInput(d: Date): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function applyTime(base: Date, hhmm: string): Date {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date(base);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
 function formatDateInput(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -404,16 +415,25 @@ function EventModal({
   slots,
   attendees,
   accessToken,
+  minDuration,
   onClose,
 }: {
   slots: FreeSlot[];
   attendees: string[];
   accessToken: string;
+  minDuration: number;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"common" | "individual">("common");
   const [commonTitle, setCommonTitle] = useState("");
+  const [commonDuration, setCommonDuration] = useState(String(minDuration));
   const [individualTitles, setIndividualTitles] = useState<string[]>(() => slots.map(() => ""));
+  const [individualEndTimes, setIndividualEndTimes] = useState<string[]>(() =>
+    slots.map((slot) => {
+      const defaultEnd = new Date(slot.start.getTime() + minDuration * 60 * 1000);
+      return toTimeInput(defaultEnd > slot.end ? slot.end : defaultEnd);
+    })
+  );
   const [creating, setCreating] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
@@ -422,15 +442,26 @@ function EventModal({
   const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  function computeEnds(): Date[] {
+    if (mode === "common") {
+      return slots.map((slot) => {
+        const end = new Date(slot.start.getTime() + Number(commonDuration) * 60 * 1000);
+        return end > slot.end ? slot.end : end;
+      });
+    }
+    return slots.map((slot, i) => applyTime(slot.start, individualEndTimes[i]));
+  }
+
   async function create() {
     const titles = mode === "common"
       ? slots.map(() => commonTitle.trim())
       : individualTitles.map((t) => t.trim());
 
-    if (titles.some((t) => !t)) {
-      setErr("すべてのタイトルを入力してください。");
-      return;
-    }
+    if (titles.some((t) => !t)) { setErr("すべてのタイトルを入力してください。"); return; }
+
+    const ends = computeEnds();
+    if (ends.some((end, i) => end <= slots[i].start)) { setErr("終了時刻は開始時刻より後にしてください。"); return; }
+
     setErr("");
     setCreating(true);
     try {
@@ -441,7 +472,7 @@ function EventModal({
           body: JSON.stringify({
             summary: titles[i],
             start: { dateTime: slot.start.toISOString(), timeZone: tz },
-            end: { dateTime: slot.end.toISOString(), timeZone: tz },
+            end: { dateTime: ends[i].toISOString(), timeZone: tz },
             attendees: attendees.map((email) => ({ email })),
           }),
         }).then(async (res) => {
@@ -487,18 +518,29 @@ function EventModal({
             </div>
 
             {mode === "common" ? (
-              <div className={styles.fieldGroup}>
-                <label className={styles.label}>タイトル（全件共通）</label>
-                <input
-                  type="text"
-                  className={styles.input}
-                  placeholder="例: 定例ミーティング"
-                  value={commonTitle}
-                  onChange={(e) => setCommonTitle(e.target.value)}
-                  autoFocus
-                  onKeyDown={(e) => e.key === "Enter" && create()}
-                />
-              </div>
+              <>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.label}>タイトル（全件共通）</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    placeholder="例: 定例ミーティング"
+                    value={commonTitle}
+                    onChange={(e) => setCommonTitle(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => e.key === "Enter" && create()}
+                  />
+                </div>
+                <div className={styles.fieldGroup}>
+                  <label className={styles.label}>所要時間（全件共通）</label>
+                  <select className={styles.select} value={commonDuration} onChange={(e) => setCommonDuration(e.target.value)}>
+                    <option value="30">30分</option>
+                    <option value="60">1時間</option>
+                    <option value="90">1時間30分</option>
+                    <option value="120">2時間</option>
+                  </select>
+                </div>
+              </>
             ) : (
               <div className={styles.individualList}>
                 {slots.map((slot, i) => (
@@ -506,7 +548,19 @@ function EventModal({
                     <div className={styles.individualSlotInfo}>
                       <span>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</span>
                       <span className={styles.slotTime}>
-                        {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
+                        {toTimeInput(slot.start)} 〜
+                        <input
+                          type="time"
+                          className={styles.timeInput}
+                          value={individualEndTimes[i]}
+                          min={toTimeInput(new Date(slot.start.getTime() + 15 * 60 * 1000))}
+                          max={toTimeInput(slot.end)}
+                          onChange={(e) => {
+                            const updated = [...individualEndTimes];
+                            updated[i] = e.target.value;
+                            setIndividualEndTimes(updated);
+                          }}
+                        />
                       </span>
                     </div>
                     <input
@@ -886,6 +940,7 @@ export default function ScheduleChecker() {
           slots={checkedSlots.map((i) => freeSlots[i])}
           attendees={attendees}
           accessToken={accessToken}
+          minDuration={parseInt(minDuration, 10)}
           onClose={() => setShowEventModal(false)}
         />
       )}
