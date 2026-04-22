@@ -424,10 +424,14 @@ function EventModal({
   minDuration: number;
   onClose: () => void;
 }) {
+  const isSingle = slots.length === 1;
   const [mode, setMode] = useState<"common" | "individual">("common");
   const [commonTitle, setCommonTitle] = useState("");
   const [commonDuration, setCommonDuration] = useState(String(minDuration));
   const [individualTitles, setIndividualTitles] = useState<string[]>(() => slots.map(() => ""));
+  const [individualStartTimes, setIndividualStartTimes] = useState<string[]>(() =>
+    slots.map((slot) => toTimeInput(slot.start))
+  );
   const [individualEndTimes, setIndividualEndTimes] = useState<string[]>(() =>
     slots.map((slot) => {
       const defaultEnd = new Date(slot.start.getTime() + minDuration * 60 * 1000);
@@ -439,40 +443,53 @@ function EventModal({
   const [err, setErr] = useState("");
 
   const dateOpts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
-  const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const minMs = minDuration * 60 * 1000;
 
-  function computeEnds(): Date[] {
-    if (mode === "common") {
-      return slots.map((slot) => {
-        const end = new Date(slot.start.getTime() + Number(commonDuration) * 60 * 1000);
-        return end > slot.end ? slot.end : end;
-      });
+  const effectiveMode = isSingle ? "individual" : mode;
+
+  function computeEvents(): { start: Date; end: Date }[] {
+    if (effectiveMode === "common") {
+      return slots.map((slot) => ({
+        start: slot.start,
+        end: new Date(slot.start.getTime() + Number(commonDuration) * 60 * 1000),
+      }));
     }
-    return slots.map((slot, i) => applyTime(slot.start, individualEndTimes[i]));
+    return slots.map((slot, i) => ({
+      start: applyTime(slot.start, individualStartTimes[i]),
+      end: applyTime(slot.start, individualEndTimes[i]),
+    }));
   }
 
   async function create() {
-    const titles = mode === "common"
+    const titles = effectiveMode === "common"
       ? slots.map(() => commonTitle.trim())
       : individualTitles.map((t) => t.trim());
 
     if (titles.some((t) => !t)) { setErr("すべてのタイトルを入力してください。"); return; }
 
-    const ends = computeEnds();
-    if (ends.some((end, i) => end <= slots[i].start)) { setErr("終了時刻は開始時刻より後にしてください。"); return; }
+    const events = computeEvents();
+
+    for (let i = 0; i < events.length; i++) {
+      const { start, end } = events[i];
+      const slot = slots[i];
+      if (end <= start) { setErr("終了時刻は開始時刻より後にしてください。"); return; }
+      if (end.getTime() - start.getTime() > slot.end.getTime() - slot.start.getTime()) {
+        setErr("予定の時間が空き枠を超えています。"); return;
+      }
+    }
 
     setErr("");
     setCreating(true);
     try {
-      await Promise.all(slots.map((slot, i) =>
+      await Promise.all(events.map(({ start, end }, i) =>
         fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             summary: titles[i],
-            start: { dateTime: slot.start.toISOString(), timeZone: tz },
-            end: { dateTime: ends[i].toISOString(), timeZone: tz },
+            start: { dateTime: start.toISOString(), timeZone: tz },
+            end: { dateTime: end.toISOString(), timeZone: tz },
             attendees: attendees.map((email) => ({ email })),
           }),
         }).then(async (res) => {
@@ -490,11 +507,66 @@ function EventModal({
     }
   }
 
+  function renderIndividualItem(slot: FreeSlot, i: number) {
+    const canEditStart = slot.end.getTime() - slot.start.getTime() > minMs;
+    return (
+      <div key={i} className={styles.individualItem}>
+        <div className={styles.individualSlotInfo}>
+          <span>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</span>
+          <span className={styles.slotTime}>
+            {canEditStart ? (
+              <input
+                type="time"
+                className={styles.timeInput}
+                value={individualStartTimes[i]}
+                min={toTimeInput(slot.start)}
+                max={individualEndTimes[i]}
+                onChange={(e) => {
+                  const updated = [...individualStartTimes];
+                  updated[i] = e.target.value;
+                  setIndividualStartTimes(updated);
+                }}
+              />
+            ) : (
+              toTimeInput(slot.start)
+            )}
+            {" 〜 "}
+            <input
+              type="time"
+              className={styles.timeInput}
+              value={individualEndTimes[i]}
+              min={toTimeInput(new Date(slot.start.getTime() + 15 * 60 * 1000))}
+              max={toTimeInput(slot.end)}
+              onChange={(e) => {
+                const updated = [...individualEndTimes];
+                updated[i] = e.target.value;
+                setIndividualEndTimes(updated);
+              }}
+            />
+          </span>
+        </div>
+        <input
+          type="text"
+          className={styles.input}
+          placeholder="タイトル"
+          value={individualTitles[i]}
+          autoFocus={i === 0}
+          onChange={(e) => {
+            const updated = [...individualTitles];
+            updated[i] = e.target.value;
+            setIndividualTitles(updated);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && create()}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={styles.modal}>
         <div className={styles.modalHeader}>
-          <span className={styles.modalTitle}>予定を作成（{slots.length}件）</span>
+          <span className={styles.modalTitle}>予定を作成{!isSingle && `（${slots.length}件）`}</span>
           <button className={styles.modalClose} onClick={onClose}>×</button>
         </div>
 
@@ -506,18 +578,20 @@ function EventModal({
           </div>
         ) : (
           <>
-            <div className={styles.modalModeToggle}>
-              <button
-                className={`${styles.modeBtn} ${mode === "common" ? styles.modeBtnActive : ""}`}
-                onClick={() => setMode("common")}
-              >共通タイトル</button>
-              <button
-                className={`${styles.modeBtn} ${mode === "individual" ? styles.modeBtnActive : ""}`}
-                onClick={() => setMode("individual")}
-              >個別タイトル</button>
-            </div>
+            {!isSingle && (
+              <div className={styles.modalModeToggle}>
+                <button
+                  className={`${styles.modeBtn} ${mode === "common" ? styles.modeBtnActive : ""}`}
+                  onClick={() => setMode("common")}
+                >共通タイトル</button>
+                <button
+                  className={`${styles.modeBtn} ${mode === "individual" ? styles.modeBtnActive : ""}`}
+                  onClick={() => setMode("individual")}
+                >個別タイトル</button>
+              </div>
+            )}
 
-            {mode === "common" ? (
+            {effectiveMode === "common" ? (
               <>
                 <div className={styles.fieldGroup}>
                   <label className={styles.label}>タイトル（全件共通）</label>
@@ -543,39 +617,7 @@ function EventModal({
               </>
             ) : (
               <div className={styles.individualList}>
-                {slots.map((slot, i) => (
-                  <div key={i} className={styles.individualItem}>
-                    <div className={styles.individualSlotInfo}>
-                      <span>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</span>
-                      <span className={styles.slotTime}>
-                        {toTimeInput(slot.start)} 〜
-                        <input
-                          type="time"
-                          className={styles.timeInput}
-                          value={individualEndTimes[i]}
-                          min={toTimeInput(new Date(slot.start.getTime() + 15 * 60 * 1000))}
-                          max={toTimeInput(slot.end)}
-                          onChange={(e) => {
-                            const updated = [...individualEndTimes];
-                            updated[i] = e.target.value;
-                            setIndividualEndTimes(updated);
-                          }}
-                        />
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      className={styles.input}
-                      placeholder="タイトル"
-                      value={individualTitles[i]}
-                      onChange={(e) => {
-                        const updated = [...individualTitles];
-                        updated[i] = e.target.value;
-                        setIndividualTitles(updated);
-                      }}
-                    />
-                  </div>
-                ))}
+                {slots.map((slot, i) => renderIndividualItem(slot, i))}
               </div>
             )}
 
@@ -587,7 +629,7 @@ function EventModal({
             </div>
             {err && <div className={styles.errorMsg}>{err}</div>}
             <button className={styles.btnSearch} onClick={create} disabled={creating}>
-              {creating ? "作成中..." : `${slots.length}件をカレンダーに追加`}
+              {creating ? "作成中..." : isSingle ? "カレンダーに追加" : `${slots.length}件をカレンダーに追加`}
             </button>
           </>
         )}
