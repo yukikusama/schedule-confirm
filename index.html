@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>空き時間チェッカー</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <span style="font-size:24px;">📅</span>
+  <h1>空き時間チェッカー</h1>
+</header>
+
+<!-- 未ログイン画面 -->
+<div id="authSection" class="auth-section">
+  <div class="auth-card">
+    <div class="icon">🔍</div>
+    <h2>Googleアカウントでログイン</h2>
+    <p>複数人のGoogleカレンダーを参照し、<br>共通の空き時間を自動で見つけます。</p>
+    <button class="btn-google" onclick="signIn()">
+      <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" />
+      Googleでサインイン
+    </button>
+  </div>
+</div>
+
+<!-- メイン画面 -->
+<div id="mainSection" class="main-section hidden">
+
+  <div class="user-bar">
+    <span>🔒 <span id="userEmail"></span></span>
+    <button class="btn-signout" onclick="signOut()">サインアウト</button>
+  </div>
+
+  <!-- 検索条件 -->
+  <div class="card">
+    <h2>🔎 検索条件</h2>
+
+    <!-- メールアドレス -->
+    <div class="field-group">
+      <label>対象者のメールアドレス</label>
+      <div class="email-list" id="emailList">
+        <div class="email-row" data-id="1">
+          <input type="email" placeholder="例: taro@example.com" />
+          <button class="btn-remove-email" onclick="removeEmailField(this)" title="削除">×</button>
+        </div>
+      </div>
+      <button class="btn-add-email" onclick="addEmailField()">
+        ＋ メールアドレスを追加
+      </button>
+    </div>
+
+    <!-- 検索期間 -->
+    <div class="field-group">
+      <label>検索期間</label>
+      <div class="date-range">
+        <div>
+          <input type="date" id="startDate" />
+        </div>
+        <div>
+          <input type="date" id="endDate" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 稼働時間・最低時間 -->
+    <div class="inline-fields">
+      <div class="field-group">
+        <label>稼働時間帯</label>
+        <div class="time-range">
+          <select id="workStart">
+            <option value="08:00">08:00</option>
+            <option value="09:00" selected>09:00</option>
+            <option value="10:00">10:00</option>
+            <option value="11:00">11:00</option>
+          </select>
+          <select id="workEnd">
+            <option value="17:00">17:00</option>
+            <option value="18:00" selected>18:00</option>
+            <option value="19:00">19:00</option>
+            <option value="20:00">20:00</option>
+            <option value="21:00">21:00</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label>最低空き時間</label>
+        <div class="duration-select">
+          <select id="minDuration">
+            <option value="30">30分以上</option>
+            <option value="60" selected>1時間以上</option>
+            <option value="90">1.5時間以上</option>
+            <option value="120">2時間以上</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="errorMsg" class="error-message hidden"></div>
+
+    <button id="searchBtn" class="btn-search" onclick="searchFreeSlots()">
+      空き時間を検索
+    </button>
+  </div>
+
+  <!-- 結果 -->
+  <div id="results" class="card hidden">
+    <div class="results-header">
+      <h2>✅ 共通の空き時間</h2>
+      <span class="results-count" id="resultsCount">0件</span>
+    </div>
+    <div class="slot-list" id="slotList"></div>
+  </div>
+
+</div>
+
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/草間裕貴/.claude/projects/C--Users------documents-claude-pj-schedule-confirm/**)",
+      "Read(//c/Users/草間裕貴/.claude/projects/C--Users------documents-claude-pj-schedule-confirm/memory/**)",
+      "Bash(vercel --version 2>/dev/null || echo \"未インストール\")",
+      "Bash(npm install:*)",
+      "Bash(vercel --version)"
+    ]
+  }
+}
