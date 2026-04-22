@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import styles from "./ScheduleChecker.module.css";
 
 const CLIENT_ID = "258100577056-aqs0c8aopdse7o1fd67ds1f64hmqr3to.apps.googleusercontent.com";
-const SCOPES = "https://www.googleapis.com/auth/calendar.freebusy";
+const SCOPES = [
+  "https://www.googleapis.com/auth/calendar.freebusy",
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/contacts.readonly",
+  "https://www.googleapis.com/auth/directory.readonly",
+].join(" ");
 
 type BusyPeriod = { start: Date; end: Date };
 type BusyMap = Record<string, BusyPeriod[]>;
 type FreeSlot = { start: Date; end: Date };
+type Contact = { name: string; email: string };
 
 declare global {
   interface Window {
@@ -101,12 +107,228 @@ function calcFreeSlots(
   return freeSlots;
 }
 
+function formatDuration(ms: number): string {
+  const min = Math.round(ms / 60000);
+  if (min >= 60) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m > 0 ? `${h}時間${m}分` : `${h}時間`;
+  }
+  return `${min}分`;
+}
+
+// ============================================================
+// ContactPicker コンポーネント
+// ============================================================
+function ContactPicker({
+  contacts,
+  selected,
+  onChange,
+}: {
+  contacts: Contact[];
+  selected: Contact[];
+  onChange: (contacts: Contact[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = contacts.filter((c) => {
+    if (selected.some((s) => s.email === c.email)) return false;
+    const q = query.toLowerCase();
+    return c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+  });
+
+  function select(c: Contact) {
+    onChange([...selected, c]);
+    setQuery("");
+  }
+
+  function remove(email: string) {
+    onChange(selected.filter((c) => c.email !== email));
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && isValidEmail(query) && !selected.some((s) => s.email === query)) {
+      onChange([...selected, { name: query, email: query }]);
+      setQuery("");
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div ref={wrapperRef} className={styles.pickerWrapper}>
+      {selected.length > 0 && (
+        <div className={styles.chips}>
+          {selected.map((c) => (
+            <span key={c.email} className={styles.chip}>
+              {c.name !== c.email ? c.name : c.email}
+              <button className={styles.chipRemove} onClick={() => remove(c.email)} aria-label="削除">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        type="text"
+        className={styles.input}
+        placeholder="名前またはメールアドレスで検索..."
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+      />
+      {open && (filtered.length > 0 || (query && isValidEmail(query))) && (
+        <div className={styles.dropdown}>
+          {filtered.slice(0, 8).map((c) => (
+            <button key={c.email} className={styles.dropdownItem} onMouseDown={() => select(c)}>
+              <span className={styles.dropdownName}>{c.name}</span>
+              <span className={styles.dropdownEmail}>{c.email}</span>
+            </button>
+          ))}
+          {query && isValidEmail(query) && !contacts.some((c) => c.email === query) && (
+            <button
+              className={styles.dropdownItem}
+              onMouseDown={() => { onChange([...selected, { name: query, email: query }]); setQuery(""); setOpen(false); }}
+            >
+              <span className={styles.dropdownName}>追加</span>
+              <span className={styles.dropdownEmail}>{query}</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// EventModal コンポーネント
+// ============================================================
+function EventModal({
+  slot,
+  attendees,
+  accessToken,
+  onClose,
+}: {
+  slot: FreeSlot;
+  attendees: string[];
+  accessToken: string;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState("");
+
+  const dateOpts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+
+  async function create() {
+    if (!title.trim()) { setErr("タイトルを入力してください。"); return; }
+    setErr("");
+    setCreating(true);
+    try {
+      const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          summary: title.trim(),
+          start: { dateTime: slot.start.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+          end: { dateTime: slot.end.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+          attendees: attendees.map((email) => ({ email })),
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e?.error?.message || `HTTPエラー ${res.status}`);
+      }
+      setDone(true);
+    } catch (e) {
+      setErr("作成失敗: " + (e instanceof Error ? e.message : "不明なエラー"));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className={styles.modalOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className={styles.modal}>
+        <div className={styles.modalHeader}>
+          <span className={styles.modalTitle}>予定を作成</span>
+          <button className={styles.modalClose} onClick={onClose}>×</button>
+        </div>
+
+        {done ? (
+          <div className={styles.modalDone}>
+            <div className={styles.modalDoneIcon}>✓</div>
+            <div>Googleカレンダーに追加しました</div>
+            <button className={styles.btnSearch} onClick={onClose} style={{ marginTop: 16 }}>閉じる</button>
+          </div>
+        ) : (
+          <>
+            <div className={styles.modalSlotInfo}>
+              <div>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</div>
+              <div className={styles.slotTime}>
+                {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
+              </div>
+            </div>
+
+            <div className={styles.fieldGroup}>
+              <label className={styles.label}>タイトル</label>
+              <input
+                type="text"
+                className={styles.input}
+                placeholder="例: 定例ミーティング"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && create()}
+              />
+            </div>
+
+            <div className={styles.fieldGroup}>
+              <label className={styles.label}>参加者</label>
+              <div className={styles.attendeeList}>
+                {attendees.map((a) => (
+                  <span key={a} className={styles.chip}>{a}</span>
+                ))}
+              </div>
+            </div>
+
+            {err && <div className={styles.errorMsg}>{err}</div>}
+
+            <button className={styles.btnSearch} onClick={create} disabled={creating}>
+              {creating ? "作成中..." : "カレンダーに追加"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// メインコンポーネント
+// ============================================================
 export default function ScheduleChecker() {
   const tokenClientRef = useRef<{ requestAccessToken: (opts: { prompt: string }) => void } | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [includeSelf, setIncludeSelf] = useState(true);
-  const [emails, setEmails] = useState([""]);
+  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [workStart, setWorkStart] = useState("09:00");
@@ -115,6 +337,7 @@ export default function ScheduleChecker() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [freeSlots, setFreeSlots] = useState<FreeSlot[] | null>(null);
+  const [eventModal, setEventModal] = useState<FreeSlot | null>(null);
 
   useEffect(() => {
     const today = new Date();
@@ -137,6 +360,47 @@ export default function ScheduleChecker() {
     document.body.appendChild(script);
   }, []);
 
+  const fetchContacts = useCallback(async (token: string) => {
+    const results: Contact[] = [];
+
+    // 個人の連絡先
+    try {
+      const res = await fetch(
+        "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        for (const p of data.connections || []) {
+          const email = p.emailAddresses?.[0]?.value;
+          const name = p.names?.[0]?.displayName || email;
+          if (email) results.push({ name, email });
+        }
+      }
+    } catch { /* 無視 */ }
+
+    // 組織ディレクトリ（Google Workspace）
+    try {
+      const res = await fetch(
+        "https://people.googleapis.com/v1/people:listDirectoryPeople?readMask=names,emailAddresses&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE&pageSize=1000",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        for (const p of data.people || []) {
+          const email = p.emailAddresses?.[0]?.value;
+          const name = p.names?.[0]?.displayName || email;
+          if (email && !results.some((r) => r.email === email)) {
+            results.push({ name, email });
+          }
+        }
+      }
+    } catch { /* 無視 */ }
+
+    results.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+    setContacts(results);
+  }, []);
+
   function onTokenReceived(response: { access_token?: string; error?: string }) {
     if (response.error || !response.access_token) {
       setError("認証に失敗しました: " + response.error);
@@ -150,6 +414,8 @@ export default function ScheduleChecker() {
     })
       .then((r) => r.json())
       .then((info) => setUserEmail(info.email || ""));
+
+    fetchContacts(token);
   }
 
   function signIn() {
@@ -157,53 +423,30 @@ export default function ScheduleChecker() {
   }
 
   function signOut() {
-    if (accessToken) {
-      window.google.accounts.oauth2.revoke(accessToken, () => {});
-    }
+    if (accessToken) window.google.accounts.oauth2.revoke(accessToken, () => {});
     setAccessToken(null);
     setUserEmail("");
+    setContacts([]);
+    setSelectedContacts([]);
     setFreeSlots(null);
     setError("");
-  }
-
-  function addEmail() {
-    setEmails((prev) => [...prev, ""]);
-  }
-
-  function removeEmail(index: number) {
-    if (emails.length <= 1) return;
-    setEmails((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function updateEmail(index: number, value: string) {
-    setEmails((prev) => prev.map((e, i) => (i === index ? value : e)));
   }
 
   async function searchFreeSlots() {
     setError("");
     setFreeSlots(null);
 
-    const validEmails = [
+    const targetEmails = [
       ...(includeSelf && userEmail ? [userEmail] : []),
-      ...emails.map((e) => e.trim()).filter(Boolean),
+      ...selectedContacts.map((c) => c.email),
     ];
-    if (validEmails.length === 0) {
-      setError("少なくとも1人のメールアドレスを入力してください。");
+
+    if (targetEmails.length === 0) {
+      setError("少なくとも1人を選択してください。");
       return;
     }
-    const invalidEmail = validEmails.find((e) => !isValidEmail(e));
-    if (invalidEmail) {
-      setError("メールアドレスの形式が正しくありません。");
-      return;
-    }
-    if (!startDate || !endDate) {
-      setError("検索期間を入力してください。");
-      return;
-    }
-    if (startDate > endDate) {
-      setError("終了日は開始日以降の日付を指定してください。");
-      return;
-    }
+    if (!startDate || !endDate) { setError("検索期間を入力してください。"); return; }
+    if (startDate > endDate) { setError("終了日は開始日以降の日付を指定してください。"); return; }
 
     setLoading(true);
     try {
@@ -214,15 +457,12 @@ export default function ScheduleChecker() {
 
       const response = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           timeMin,
           timeMax,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          items: validEmails.map((id) => ({ id })),
+          items: targetEmails.map((id) => ({ id })),
         }),
       });
 
@@ -234,17 +474,13 @@ export default function ScheduleChecker() {
       const data = await response.json();
       const busyMap: BusyMap = {};
       for (const [email, calData] of Object.entries(data.calendars as Record<string, { busy?: { start: string; end: string }[]; errors?: unknown[] }>)) {
-        if (calData.errors) {
-          console.warn(`カレンダーアクセス不可: ${email}`);
-        }
-        busyMap[email] = (calData.busy || []).map((b) => ({
+        busyMap[email] = ((calData.busy || []) as { start: string; end: string }[]).map((b) => ({
           start: new Date(b.start),
           end: new Date(b.end),
         }));
       }
 
-      const slots = calcFreeSlots(busyMap, startDate, endDate, workStart, workEnd, parseInt(minDuration, 10));
-      setFreeSlots(slots);
+      setFreeSlots(calcFreeSlots(busyMap, startDate, endDate, workStart, workEnd, parseInt(minDuration, 10)));
     } catch (err) {
       setError("APIエラー: " + (err instanceof Error ? err.message : "不明なエラー"));
     } finally {
@@ -252,18 +488,13 @@ export default function ScheduleChecker() {
     }
   }
 
-  function formatDuration(ms: number): string {
-    const min = Math.round(ms / 60000);
-    if (min >= 60) {
-      const h = Math.floor(min / 60);
-      const m = min % 60;
-      return m > 0 ? `${h}時間${m}分` : `${h}時間`;
-    }
-    return `${min}分`;
-  }
-
   const dateOpts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
   const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+
+  const attendees = [
+    ...(includeSelf && userEmail ? [userEmail] : []),
+    ...selectedContacts.map((c) => c.email),
+  ];
 
   if (!accessToken) {
     return (
@@ -306,71 +537,30 @@ export default function ScheduleChecker() {
             <label className={styles.label}>自分のカレンダー</label>
             <div className={styles.radioGroup}>
               <label className={styles.radioLabel}>
-                <input
-                  type="radio"
-                  name="includeSelf"
-                  className={styles.radio}
-                  checked={includeSelf}
-                  onChange={() => setIncludeSelf(true)}
-                />
+                <input type="radio" name="includeSelf" className={styles.radio} checked={includeSelf} onChange={() => setIncludeSelf(true)} />
                 含める（{userEmail}）
               </label>
               <label className={styles.radioLabel}>
-                <input
-                  type="radio"
-                  name="includeSelf"
-                  className={styles.radio}
-                  checked={!includeSelf}
-                  onChange={() => setIncludeSelf(false)}
-                />
+                <input type="radio" name="includeSelf" className={styles.radio} checked={!includeSelf} onChange={() => setIncludeSelf(false)} />
                 含めない
               </label>
             </div>
           </div>
 
           <div className={styles.fieldGroup}>
-            <label className={styles.label}>対象者のメールアドレス</label>
-            <div className={styles.emailList}>
-              {emails.map((email, i) => (
-                <div key={i} className={styles.emailRow}>
-                  <input
-                    type="email"
-                    className={`${styles.input} ${email && !isValidEmail(email) ? styles.inputInvalid : ""}`}
-                    placeholder="taro@example.com"
-                    value={email}
-                    onChange={(e) => updateEmail(i, e.target.value)}
-                  />
-                  <button
-                    className={styles.btnRemove}
-                    onClick={() => removeEmail(i)}
-                    disabled={emails.length <= 1}
-                    aria-label="削除"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button className={styles.btnAdd} onClick={addEmail}>
-              + メールアドレスを追加
-            </button>
+            <label className={styles.label}>対象者</label>
+            <ContactPicker
+              contacts={contacts}
+              selected={selectedContacts}
+              onChange={setSelectedContacts}
+            />
           </div>
 
           <div className={styles.fieldGroup}>
             <label className={styles.label}>検索期間</label>
             <div className={styles.dateRange}>
-              <input
-                type="date"
-                className={styles.input}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-              <input
-                type="date"
-                className={styles.input}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+              <input type="date" className={styles.input} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <input type="date" className={styles.input} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
 
@@ -393,7 +583,6 @@ export default function ScheduleChecker() {
                 </select>
               </div>
             </div>
-
             <div className={styles.fieldGroup}>
               <label className={styles.label}>最低空き時間</label>
               <select className={styles.select} value={minDuration} onChange={(e) => setMinDuration(e.target.value)}>
@@ -407,11 +596,7 @@ export default function ScheduleChecker() {
 
           {error && <div className={styles.errorMsg}>{error}</div>}
 
-          <button
-            className={styles.btnSearch}
-            onClick={searchFreeSlots}
-            disabled={loading}
-          >
+          <button className={styles.btnSearch} onClick={searchFreeSlots} disabled={loading}>
             {loading ? "検索中..." : "空き時間を検索"}
           </button>
         </section>
@@ -445,16 +630,15 @@ export default function ScheduleChecker() {
                   <div key={i} className={styles.slotItem}>
                     <span className={styles.slotNumber}>{i + 1}</span>
                     <div className={styles.slotInfo}>
-                      <div className={styles.slotDate}>
-                        {slot.start.toLocaleDateString("ja-JP", dateOpts)}
-                      </div>
+                      <div className={styles.slotDate}>{slot.start.toLocaleDateString("ja-JP", dateOpts)}</div>
                       <div className={styles.slotTime}>
                         {slot.start.toLocaleTimeString("ja-JP", timeOpts)} 〜 {slot.end.toLocaleTimeString("ja-JP", timeOpts)}
                       </div>
                     </div>
-                    <span className={styles.slotDuration}>
-                      {formatDuration(slot.end.getTime() - slot.start.getTime())}
-                    </span>
+                    <span className={styles.slotDuration}>{formatDuration(slot.end.getTime() - slot.start.getTime())}</span>
+                    <button className={styles.btnCreateEvent} onClick={() => setEventModal(slot)}>
+                      予定を作成
+                    </button>
                   </div>
                 ))}
               </div>
@@ -462,6 +646,15 @@ export default function ScheduleChecker() {
           </section>
         )}
       </main>
+
+      {eventModal && (
+        <EventModal
+          slot={eventModal}
+          attendees={attendees}
+          accessToken={accessToken}
+          onClose={() => setEventModal(null)}
+        />
+      )}
     </div>
   );
 }

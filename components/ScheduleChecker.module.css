@@ -482,6 +482,196 @@
   font-family: var(--font-mono);
 }
 
+.btnCreateEvent {
+  background: none;
+  border: none;
+  box-shadow: var(--shadow-ring);
+  color: var(--color-text);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.btnCreateEvent:hover {
+  background: var(--color-surface);
+}
+
+/* ============================================================
+   Contact Picker
+   ============================================================ */
+.pickerWrapper {
+  position: relative;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-border);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.chipRemove {
+  background: none;
+  border: none;
+  color: var(--color-placeholder);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.chipRemove:hover {
+  color: var(--color-text);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
+  border-radius: 8px;
+  z-index: 100;
+  overflow: hidden;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.dropdownItem {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.dropdownItem:hover {
+  background: var(--color-surface);
+}
+
+.dropdownName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.dropdownEmail {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.attendeeList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ============================================================
+   Modal
+   ============================================================ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  width: 100%;
+  max-width: 440px;
+  padding: 28px;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modalTitle {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.32px;
+  color: var(--color-text);
+}
+
+.modalClose {
+  background: none;
+  border: none;
+  color: var(--color-placeholder);
+  font-size: 20px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+}
+
+.modalClose:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.modalSlotInfo {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.modalDone {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.modalDoneIcon {
+  font-size: 36px;
+  margin-bottom: 12px;
+  color: var(--color-text);
+}
+
 /* ============================================================
    Responsive
    ============================================================ */

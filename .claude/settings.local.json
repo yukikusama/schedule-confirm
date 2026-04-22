@@ -5,7 +5,25 @@
       "Read(//c/Users/草間裕貴/.claude/projects/C--Users------documents-claude-pj-schedule-confirm/memory/**)",
       "Bash(vercel --version 2>/dev/null || echo \"未インストール\")",
       "Bash(npm install:*)",
-      "Bash(vercel --version)"
+      "Bash(vercel --version)",
+      "Bash(winget install:*)",
+      "Bash(node --version && npm --version)",
+      "Bash(npx create-next-app@latest . --typescript --eslint --no-tailwind --no-src-dir --app --no-import-alias --yes 2>&1)",
+      "Bash(mkdir -p /tmp/schedule-backup && cp /c/Users/草間裕貴/documents/claude-pj/schedule-confirm/app.js /tmp/schedule-backup/ && cp /c/Users/草間裕貴/documents/claude-pj/schedule-confirm/index.html /tmp/schedule-backup/ && cp /c/Users/草間裕貴/documents/claude-pj/schedule-confirm/style.css /tmp/schedule-backup/ && cp /c/Users/草間裕貴/documents/claude-pj/schedule-confirm/README.md /tmp/schedule-backup/ && echo \"backup done\")",
+      "Bash(mv DESIGN-vercel.md /tmp/schedule-backup/ && mv README.md /tmp/schedule-backup/ && npx create-next-app@latest . --typescript --eslint --no-tailwind --no-src-dir --app --no-import-alias --yes 2>&1)",
+      "Bash(mv /tmp/schedule-backup/DESIGN-vercel.md . && mv /tmp/schedule-backup/README.md . && ls)",
+      "Bash(npm run:*)",
+      "Bash(gh auth:*)",
+      "Bash(ssh -T git@github.com 2>&1)",
+      "Bash(git config:*)",
+      "Bash(echo \"protocol=https\nhost=github.com\" | git credential fill 2>&1)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote:*)",
+      "Bash(npx vercel:*)",
+      "WebFetch(domain:schedule-confirm.vercel.app)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)"
     ]
   }
 }
