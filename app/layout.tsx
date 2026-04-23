@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Sukima",
     description: "あなたの心の隙間、お埋めします。",
-    url: "https://schedule-confirm.vercel.app",
+    url: "https://sukima-find.vercel.app",
     siteName: "Sukima",
     type: "website",
   },
