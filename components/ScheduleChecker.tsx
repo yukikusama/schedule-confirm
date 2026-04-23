@@ -7,6 +7,8 @@ const CLIENT_ID = "258100577056-aqs0c8aopdse7o1fd67ds1f64hmqr3to.apps.googleuser
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.freebusy",
   "https://www.googleapis.com/auth/calendar.events",
+  "openid",
+  "email",
 ].join(" ");
 
 const MEMBERS_KEY = "schedule_checker_members";
