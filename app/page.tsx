@@ -1,50 +1,7 @@
-"use client";
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import styles from "./page.module.css";
 
-const CLIENT_ID = "258100577056-aqs0c8aopdse7o1fd67ds1f64hmqr3to.apps.googleusercontent.com";
-const SCOPES = [
-  "https://www.googleapis.com/auth/calendar.freebusy",
-  "https://www.googleapis.com/auth/calendar.events",
-].join(" ");
-
 export default function LandingPage() {
-  const tokenClientRef = useRef<{ requestAccessToken: (opts: { prompt: string }) => void } | null>(null);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    const init = () => {
-      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (response) => {
-          if (response.access_token && !response.error) {
-            window.location.href = "/app";
-          } else {
-            setChecking(false);
-          }
-        },
-      });
-      // すでにログイン済みなら自動で /app へ
-      tokenClientRef.current.requestAccessToken({ prompt: "" });
-    };
-
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = init;
-    document.body.appendChild(script);
-  }, []);
-
-  const handleLogin = () => {
-    tokenClientRef.current?.requestAccessToken({ prompt: "select_account" });
-  };
-
-  if (checking) {
-    return <div className={styles.page} />;
-  }
-
   return (
     <div className={styles.page}>
       <section className={styles.hero}>
@@ -53,9 +10,9 @@ export default function LandingPage() {
           あなたの心の隙間、<br />お埋めします。
         </h1>
         <p className={styles.sub}>（カレンダーの隙間も）</p>
-        <button onClick={handleLogin} className={styles.cta}>
-          Googleでログイン
-        </button>
+        <Link href="/app" className={styles.cta}>
+          隙間を探しに行く →
+        </Link>
       </section>
 
       <section className={styles.features}>
