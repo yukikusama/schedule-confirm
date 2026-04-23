@@ -814,7 +814,7 @@ export default function ScheduleChecker() {
   return (
     <div className={styles.wrapper}>
       <header className={styles.header}>
-        <span className={styles.headerTitle}>Sukima</span>
+        <a href="/" className={styles.headerTitle}>Sukima</a>
         <div className={styles.userBar}>
           <button className={styles.btnMemberManager} onClick={() => setShowMemberManager(true)}>
             メンバー管理
