@@ -720,9 +720,8 @@ export default function ScheduleChecker() {
     setFreeSlots(null);
     setCheckedSlots([]);
 
-    // 自分のカレンダーは "primary" で問い合わせる（メールアドレス指定より確実）
     const freeBusyItems: { id: string }[] = [
-      ...(includeSelf ? [{ id: "primary" }] : []),
+      ...(includeSelf && userEmail ? [{ id: userEmail }] : []),
       ...selectedMembers.map((m) => ({ id: m.email })),
     ];
     if (freeBusyItems.length === 0) { setError("少なくとも1人を選択してください。"); return; }
@@ -771,12 +770,6 @@ export default function ScheduleChecker() {
 
   const dateOpts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
   const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
-  // FreeBusy検索対象（includeSelfの設定に従う）
-  const attendees = [
-    ...(includeSelf && userEmail ? [userEmail] : []),
-    ...selectedMembers.map((m) => m.email),
-  ];
-
   // イベント参加者（自分はオーガナイザーとしてAPIが自動設定するため除外）
   const eventAttendees = selectedMembers.map((m) => m.email);
 
