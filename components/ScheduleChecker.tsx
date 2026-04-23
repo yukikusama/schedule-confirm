@@ -724,6 +724,7 @@ export default function ScheduleChecker() {
       ...(includeSelf && userEmail ? [{ id: userEmail }] : []),
       ...selectedMembers.map((m) => ({ id: m.email })),
     ];
+    console.log("[FreeBusy] includeSelf:", includeSelf, "userEmail:", userEmail, "items:", freeBusyItems);
     if (freeBusyItems.length === 0) { setError("少なくとも1人を選択してください。"); return; }
     if (!startDate || !endDate) { setError("検索期間を入力してください。"); return; }
     if (startDate > endDate) { setError("終了日は開始日以降の日付を指定してください。"); return; }
@@ -752,8 +753,12 @@ export default function ScheduleChecker() {
       }
 
       const data = await response.json();
+      console.log("[FreeBusy] response:", JSON.stringify(data.calendars));
       const busyMap: BusyMap = {};
-      for (const [email, calData] of Object.entries(data.calendars as Record<string, { busy?: { start: string; end: string }[] }>)) {
+      for (const [email, calData] of Object.entries(data.calendars as Record<string, { busy?: { start: string; end: string }[]; errors?: unknown[] }>)) {
+        if ((calData as { errors?: unknown[] }).errors?.length) {
+          console.warn("[FreeBusy] error for", email, (calData as { errors?: unknown[] }).errors);
+        }
         busyMap[email] = ((calData.busy || []) as { start: string; end: string }[]).map((b) => ({
           start: new Date(b.start),
           end: new Date(b.end),
