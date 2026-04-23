@@ -834,14 +834,13 @@ export default function ScheduleChecker() {
           <div className={styles.fieldGroup}>
             <label className={styles.label}>対象者</label>
             <ContactPicker members={members} selected={selectedMembers} onChange={setSelectedMembers} onOpenMemberManager={() => setShowMemberManager(true)} />
-            {userEmail && !selectedMembers.some((m) => m.email === userEmail) && (
-              <button
-                className={styles.btnAddSelf}
-                onClick={() => setSelectedMembers([{ id: "self", email: userEmail }, ...selectedMembers])}
-              >
-                ＋ 自分を追加（{userEmail}）
-              </button>
-            )}
+            <button
+              className={styles.btnAddSelf}
+              disabled={!userEmail || selectedMembers.some((m) => m.email === userEmail)}
+              onClick={() => setSelectedMembers([{ id: "self", email: userEmail }, ...selectedMembers])}
+            >
+              ＋ 自分を追加{userEmail ? `（${userEmail}）` : ""}
+            </button>
           </div>
 
           <div className={styles.fieldGroup}>

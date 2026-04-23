@@ -168,8 +168,15 @@
   transition: background 0.15s;
 }
 
-.btnAddSelf:hover {
+.btnAddSelf:hover:not(:disabled) {
   background: rgba(30, 215, 96, 0.1);
+}
+
+.btnAddSelf:disabled {
+  border-color: var(--color-muted);
+  color: var(--color-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .btnSignout:focus-visible {
