@@ -36,7 +36,7 @@ export default function LandingPage() {
       <section className={styles.targets}>
         <h2 className={styles.sectionTitle}>こんな人に使ってほしい</h2>
         <ul className={styles.targetList}>
-          <li>AO木さんと松DさんとKUJIMAさんとetcの予定調整に飽きた人</li>
+          <li>AO木さんと松Dさんとetcの予定調整に飽きた人</li>
           <li>調整さんとのやりとりで消耗した人</li>
           <li>会議調整に人生の何%かを溶かしている人</li>
           <li>心の隙間を抱えているすべての人</li>
