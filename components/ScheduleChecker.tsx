@@ -648,7 +648,6 @@ export default function ScheduleChecker() {
   const [autoLoginPending, setAutoLoginPending] = useState(true);
   const { members, addMember, removeMember } = useMembers();
   const [showMemberManager, setShowMemberManager] = useState(false);
-  const [includeSelf, setIncludeSelf] = useState(true);
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -720,11 +719,7 @@ export default function ScheduleChecker() {
     setFreeSlots(null);
     setCheckedSlots([]);
 
-    const freeBusyItems: { id: string }[] = [
-      ...(includeSelf && userEmail ? [{ id: userEmail }] : []),
-      ...selectedMembers.map((m) => ({ id: m.email })),
-    ];
-    console.log("[FreeBusy] includeSelf:", includeSelf, "userEmail:", userEmail, "items:", freeBusyItems);
+    const freeBusyItems = selectedMembers.map((m) => ({ id: m.email }));
     if (freeBusyItems.length === 0) { setError("少なくとも1人を選択してください。"); return; }
     if (!startDate || !endDate) { setError("検索期間を入力してください。"); return; }
     if (startDate > endDate) { setError("終了日は開始日以降の日付を指定してください。"); return; }
@@ -753,12 +748,8 @@ export default function ScheduleChecker() {
       }
 
       const data = await response.json();
-      console.log("[FreeBusy] response:", JSON.stringify(data.calendars));
       const busyMap: BusyMap = {};
-      for (const [email, calData] of Object.entries(data.calendars as Record<string, { busy?: { start: string; end: string }[]; errors?: unknown[] }>)) {
-        if ((calData as { errors?: unknown[] }).errors?.length) {
-          console.warn("[FreeBusy] error for", email, (calData as { errors?: unknown[] }).errors);
-        }
+      for (const [email, calData] of Object.entries(data.calendars as Record<string, { busy?: { start: string; end: string }[] }>)) {
         busyMap[email] = ((calData.busy || []) as { start: string; end: string }[]).map((b) => ({
           start: new Date(b.start),
           end: new Date(b.end),
@@ -838,22 +829,16 @@ export default function ScheduleChecker() {
           <h2 className={styles.cardTitle}>検索条件</h2>
 
           <div className={styles.fieldGroup}>
-            <label className={styles.label}>自分のカレンダー</label>
-            <div className={styles.radioGroup}>
-              <label className={styles.radioLabel}>
-                <input type="radio" name="includeSelf" className={styles.radio} checked={includeSelf} onChange={() => setIncludeSelf(true)} />
-                含める（{userEmail}）
-              </label>
-              <label className={styles.radioLabel}>
-                <input type="radio" name="includeSelf" className={styles.radio} checked={!includeSelf} onChange={() => setIncludeSelf(false)} />
-                含めない
-              </label>
-            </div>
-          </div>
-
-          <div className={styles.fieldGroup}>
             <label className={styles.label}>対象者</label>
             <ContactPicker members={members} selected={selectedMembers} onChange={setSelectedMembers} onOpenMemberManager={() => setShowMemberManager(true)} />
+            {userEmail && !selectedMembers.some((m) => m.email === userEmail) && (
+              <button
+                className={styles.btnAddSelf}
+                onClick={() => setSelectedMembers([{ id: "self", email: userEmail }, ...selectedMembers])}
+              >
+                ＋ 自分を追加（{userEmail}）
+              </button>
+            )}
           </div>
 
           <div className={styles.fieldGroup}>

@@ -155,6 +155,22 @@
   background: var(--color-card-hover);
 }
 
+.btnAddSelf {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btnAddSelf:hover {
+  background: rgba(30, 215, 96, 0.1);
+}
+
 .btnSignout:focus-visible {
   outline: 2px solid var(--focus-color);
   outline-offset: 2px;
