@@ -678,7 +678,6 @@ export default function ScheduleChecker() {
         scope: SCOPES,
         callback: (response) => {
           onTokenReceived(response);
-          setAutoLoginPending(false);
         },
       });
       // 一度ログインしたことがあれば自動でトークンを取得（ポップアップなし）
@@ -690,6 +689,7 @@ export default function ScheduleChecker() {
   function onTokenReceived(response: { access_token?: string; error?: string }) {
     if (response.error || !response.access_token) {
       // サイレントログイン失敗は無視（手動ログインへフォールバック）
+      setAutoLoginPending(false);
       return;
     }
     const token = response.access_token;
@@ -698,7 +698,10 @@ export default function ScheduleChecker() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
-      .then((info) => setUserEmail(info.email || ""));
+      .then((info) => {
+        setUserEmail(info.email || "");
+        setAutoLoginPending(false);
+      });
   }
 
   function signIn() {
