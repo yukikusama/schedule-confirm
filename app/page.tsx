@@ -2,22 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
 
-declare global {
-  interface Window {
-    google: {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            callback: (response: { access_token?: string; error?: string }) => void;
-          }) => { requestAccessToken: (opts: { prompt: string }) => void };
-        };
-      };
-    };
-  }
-}
-
 const CLIENT_ID = "258100577056-aqs0c8aopdse7o1fd67ds1f64hmqr3to.apps.googleusercontent.com";
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.freebusy",
