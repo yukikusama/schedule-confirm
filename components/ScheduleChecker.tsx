@@ -836,8 +836,8 @@ export default function ScheduleChecker() {
             <ContactPicker members={members} selected={selectedMembers} onChange={setSelectedMembers} onOpenMemberManager={() => setShowMemberManager(true)} />
             <button
               className={styles.btnAddSelf}
-              disabled={!userEmail || selectedMembers.some((m) => m.email === userEmail)}
-              onClick={() => setSelectedMembers([{ id: "self", email: userEmail }, ...selectedMembers])}
+              disabled={Boolean(userEmail && selectedMembers.some((m) => m.email === userEmail))}
+              onClick={() => { if (userEmail) setSelectedMembers([{ id: "self", email: userEmail }, ...selectedMembers]); }}
             >
               ＋ 自分を追加{userEmail ? `（${userEmail}）` : ""}
             </button>
