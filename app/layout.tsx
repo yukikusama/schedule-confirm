@@ -14,7 +14,19 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Sukima",
-  description: "複数人のGoogleカレンダーから共通の空き時間を自動で見つけます",
+  description: "あなたの心の隙間、お埋めします。",
+  openGraph: {
+    title: "Sukima",
+    description: "あなたの心の隙間、お埋めします。",
+    url: "https://schedule-confirm.vercel.app",
+    siteName: "Sukima",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Sukima",
+    description: "あなたの心の隙間、お埋めします。",
+  },
 };
 
 export default function RootLayout({
